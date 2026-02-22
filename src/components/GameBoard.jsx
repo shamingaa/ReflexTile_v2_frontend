@@ -11,7 +11,7 @@ const DIFFICULTY = {
   normal: {
     startTime: 30,
     missPenalty: 4,
-    hazardChance: 0.22,
+    hazardChance: 0,
     timeRewardCap: 50,
     paceBase: 1900,
     paceFloor: 900,
@@ -22,11 +22,12 @@ const DIFFICULTY = {
     rewardSlope: 940,
     rewardStreakFactor: 0.012,
     minGain: 1.1,
+    wrongClickPenalty: 1.4,
   },
   hard: {
     startTime: 25,
     missPenalty: 4.5,
-    hazardChance: 0.3,
+    hazardChance: 0,
     timeRewardCap: 40,
     paceBase: 1500,
     paceFloor: 700,
@@ -37,11 +38,12 @@ const DIFFICULTY = {
     rewardSlope: 900,
     rewardStreakFactor: 0.018,
     minGain: 0.85,
+    wrongClickPenalty: 1.6,
   },
   extreme: {
     startTime: 20,
     missPenalty: 5,
-    hazardChance: 0.38,
+    hazardChance: 0,
     timeRewardCap: 34,
     paceBase: 1250,
     paceFloor: 550,
@@ -52,6 +54,7 @@ const DIFFICULTY = {
     rewardSlope: 860,
     rewardStreakFactor: 0.023,
     minGain: 0.75,
+    wrongClickPenalty: 1.9,
   },
 };
 
@@ -108,7 +111,7 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish }) {
     const next = pickCell(-1, [], cellCount);
     spawnTimeRef.current = performance.now();
     setActiveCell(next);
-    setHazardCell(Math.random() < settings.hazardChance ? pickCell(next, [next], cellCount) : null);
+    setHazardCell(settings.hazardChance > 0 && Math.random() < settings.hazardChance ? pickCell(next, [next], cellCount) : null);
     setLastHitSpeed(null);
     playTone(640, 120, 0.16);
   };
@@ -288,7 +291,7 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish }) {
       setStreak(0);
       flashCell(cellIndex, 'miss');
       playTone(210, 110, 0.12);
-      applyTimePenalty(2.5);
+      applyTimePenalty(settings.wrongClickPenalty || 2.5);
       return;
     }
 
