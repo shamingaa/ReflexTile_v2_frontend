@@ -1,4 +1,4 @@
-const base = import.meta.env.VITE_API_BASE || 'https://tilegame-api.atlasholdin.com';
+const base = import.meta.env.VITE_API_BASE || 'https://reflextile-api-v2.atlasholdin.com';
 
 export async function fetchScores(mode) {
   const query = new URLSearchParams();

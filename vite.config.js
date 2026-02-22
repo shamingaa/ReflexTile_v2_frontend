@@ -6,7 +6,7 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': 'https://tilegame-api.atlasholdin.com',
+      '/api': 'https://reflextile-api-v2.atlasholdin.com',
     },
   },
 });
