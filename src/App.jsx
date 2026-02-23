@@ -303,6 +303,7 @@ function App() {
             difficulty={difficulty}
             onFinish={handleFinish}
             personalBest={personalBest}
+            lastRank={lastRun?.rank ?? null}
           />
         )}
       </main>

@@ -15,6 +15,21 @@ const COMBO_LABELS = {
   50: 'LEGENDARY',
 };
 
+// ─── Daily challenge ─────────────────────────────────────────────────────────
+const CHALLENGE_KEY     = 'arcade_arena_challenge';
+const CHALLENGE_TARGETS = [300, 400, 350, 500, 450, 550, 600];
+const todayISO          = () => new Date().toISOString().split('T')[0];
+const getDailyTarget    = () => {
+  const day = Math.floor(Date.now() / 86_400_000);
+  return CHALLENGE_TARGETS[day % CHALLENGE_TARGETS.length];
+};
+const isChallengeComplete = () => {
+  try {
+    const d = JSON.parse(localStorage.getItem(CHALLENGE_KEY) || 'null');
+    return d?.date === todayISO() && d?.completed === true;
+  } catch { return false; }
+};
+
 // ─── Logo bonus tile ────────────────────────────────────────────────────────
 const LOGOS = [
   { src: '/logo_one.png', brand: 'Tuberway'  },
@@ -71,7 +86,7 @@ const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
-function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personalBest = 0 }) {
+function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personalBest = 0, lastRank = null }) {
   const [grid, setGrid]           = useState(getGrid);
   const cellCount                 = grid.cols * grid.rows;
   const [status, setStatus]       = useState('idle');
@@ -85,9 +100,19 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
   const [flashMap, setFlashMap]   = useState({});
   const [fastestHit, setFastestHit] = useState(null);
   const [totalReactionMs, setTotalReactionMs] = useState(0);
-  const [pops, setPops]           = useState([]);
-  const [comboMsg, setComboMsg]   = useState('');
-  const [logoTile, setLogoTile]   = useState(null); // { cell, logo } | null
+  const [pops, setPops]             = useState([]);
+  const [comboMsg, setComboMsg]     = useState('');
+  const [logoTile, setLogoTile]     = useState(null);   // { cell, logo } | null
+
+  // ── Engagement state ──────────────────────────────────────────────────────
+  const [countdown, setCountdown]           = useState(null);  // 3 | 2 | 1 | 'GO!' | null
+  const [arenaShake, setArenaShake]         = useState(false);
+  const [pbBanner, setPbBanner]             = useState(false);
+  const [streakLostMsg, setStreakLostMsg]   = useState(false);
+  const [snapBanner, setSnapBanner]         = useState(false);
+  const [challengeBanner, setChallengeBanner] = useState(false);
+  const [challengeComplete, setChallengeComplete] = useState(isChallengeComplete);
+  const [challengeTarget]                   = useState(getDailyTarget);
 
   // Sound toggle — persisted to localStorage
   const [soundOn, setSoundOn] = useState(
@@ -108,9 +133,21 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
   const songPosRef       = useRef(0);      // position in TAP_MELODY sequence
   const songRef          = useRef(null);   // HTMLAudioElement for background track
   const songGainRef      = useRef(null);   // GainNode — controls background volume
-  const logoTimerRef     = useRef(null);   // auto-expire timer for logo tile
-  const nextLogoAtRef    = useRef(4 + Math.floor(Math.random() * 3)); // hit count for first logo (4–6)
-  const logoIdxRef       = useRef(0);      // alternates between logo_one / logo_two
+  const logoTimerRef         = useRef(null);
+  const nextLogoAtRef        = useRef(4 + Math.floor(Math.random() * 3));
+  const logoIdxRef           = useRef(0);
+  const pbBeatenRef          = useRef(false);      // PB beaten this run already?
+  const challengeTriggeredRef = useRef(false);     // challenge completed this run?
+  const arenaShakeTimerRef   = useRef(null);
+  const prevTimeFloorRef     = useRef(null);       // last integer second for ticking
+  const allTimeSnapRef       = useRef((() => {     // best reaction time ever (from runs)
+    try {
+      const runs = JSON.parse(localStorage.getItem('arcade_arena_runs') || '[]');
+      return runs.reduce((b, r) =>
+        r.fastestHit != null ? (b == null ? r.fastestHit : Math.min(b, r.fastestHit)) : b, null);
+    } catch { return null; }
+  })());
+  const prevRunScoreRef      = useRef(null);       // score of the run before this one
   // Stat refs — synchronous counterparts for state; read by endRun
   const hitsRef          = useRef(0);
   const missesRef        = useRef(0);
@@ -217,6 +254,30 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
   useEffect(() => { scoreRef.current = score; }, [score]);
   useEffect(() => { statusRef.current = status; }, [status]);
 
+  // 3-2-1-GO! countdown
+  useEffect(() => {
+    if (status !== 'countdown' || countdown === null) return;
+    if (countdown === 'GO!') {
+      playTone(1047, 280, 0.22);
+      spawnTimeRef.current = performance.now();
+      const t = setTimeout(() => { setCountdown(null); setStatus('playing'); }, 650);
+      return () => clearTimeout(t);
+    }
+    playTone(countdown === 1 ? 880 : 660, 120, 0.15);
+    const t = setTimeout(() => setCountdown(countdown > 1 ? countdown - 1 : 'GO!'), 800);
+    return () => clearTimeout(t);
+  }, [countdown, status]); // eslint-disable-line
+
+  // Low-time ticking warning (< 5s)
+  useEffect(() => {
+    if (status !== 'playing' || timeLeft > 5 || timeLeft <= 0) return;
+    const floor = Math.floor(timeLeft);
+    if (floor !== prevTimeFloorRef.current) {
+      prevTimeFloorRef.current = floor;
+      playTone(floor <= 2 ? 1000 : 780, 65, 0.09);
+    }
+  }, [timeLeft, status]); // eslint-disable-line
+
   // Drive background song with game state
   useEffect(() => {
     if (status === 'playing')     playSong();
@@ -281,6 +342,17 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
     setComboMsg(label);
     playTone(newStreak >= 20 ? 1000 : 820, 220, 0.18);
     comboTimerRef.current = setTimeout(() => setComboMsg(''), 1200);
+    // Screen shake on GODLIKE / LEGENDARY
+    if (newStreak === 30 || newStreak === 50) {
+      setArenaShake(true);
+      if (arenaShakeTimerRef.current) clearTimeout(arenaShakeTimerRef.current);
+      arenaShakeTimerRef.current = setTimeout(() => setArenaShake(false), 500);
+    }
+  };
+
+  const showStreakLost = () => {
+    setStreakLostMsg(true);
+    setTimeout(() => setStreakLostMsg(false), 850);
   };
 
   const endRun = () => {
@@ -339,6 +411,14 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
     songPosRef.current = 0;
     nextLogoAtRef.current = 4 + Math.floor(Math.random() * 3);
     logoIdxRef.current = 0;
+    pbBeatenRef.current = false;
+    challengeTriggeredRef.current = false;
+    prevTimeFloorRef.current = null;
+    // Snapshot prev run score BEFORE this run's data is written
+    try {
+      const runs = JSON.parse(localStorage.getItem('arcade_arena_runs') || '[]');
+      prevRunScoreRef.current = runs[0]?.score ?? null;
+    } catch { prevRunScoreRef.current = null; }
   };
 
   const reset = () => {
@@ -348,17 +428,16 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
     const startT = settings.startTime;
     timeLeftRef.current = startT;
     resetRefs();
-    setStatus('playing');
+    setStatus('countdown');
+    setCountdown(3);
     setTimeLeft(startT);
     setScore(0); setStreak(0); setMisses(0); setHits(0);
     setFastestHit(null); setTotalReactionMs(0);
     setPops([]); setComboMsg(''); setFlashMap({});
     const next = pickCell(-1, [], cellCount);
-    spawnTimeRef.current = performance.now();
     setActiveCell(next);
     setHazardCell(settings.hazardChance > 0 && Math.random() < settings.hazardChance
       ? pickCell(next, [next], cellCount) : null);
-    playTone(640, 120, 0.16);
   };
 
   // ── Effects ───────────────────────────────────────────────────────────────
@@ -452,6 +531,7 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
 
   const registerMiss = () => {
     if (status !== 'playing' || finishedRef.current) return;
+    if (streak >= 5) showStreakLost();
     setStreak(0);
     setMisses((m) => m + 1);
     missesRef.current += 1;
@@ -481,12 +561,15 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
 
     // ── Hazard tile ──
     if (cellIndex === hazardCell) {
+      if (streak >= 5) showStreakLost();
       flashCell(cellIndex, 'hazard');
       playTone(140, 180, 0.15);
       setHazardCell(null);
       setStreak(0);
       missesRef.current += 1;
-      setScore((s) => { const v = Math.max(s - 10, 0); scoreRef.current = v; return v; });
+      const penalised = Math.max(scoreRef.current - 10, 0);
+      scoreRef.current = penalised;
+      setScore(penalised);
       const ended = applyTimePenalty(settings.missPenalty + 1);
       if (!ended) spawnNewTarget();
       return;
@@ -494,6 +577,7 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
 
     // ── Wrong tile ──
     if (cellIndex !== activeCell) {
+      if (streak >= 5) showStreakLost();
       setStreak(0);
       missesRef.current += 1;
       flashCell(cellIndex, 'miss');
@@ -517,20 +601,40 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
     }
 
     flashCell(cellIndex, 'hit');
-
-    // Maybe spawn a logo bonus tile
     trySpawnLogo(hitsRef.current, [cellIndex, hazardCell]);
-
-    // Play the next melody note on top of the background track
     playMelodyNote(TAP_MELODY[songPosRef.current % TAP_MELODY.length]);
     songPosRef.current++;
 
     const speedBonus  = Math.max(2, Math.round((1200 - reaction) / 30));
     const streakBonus = Math.max(0, streak - 1) * 4;
     const gained      = 15 + speedBonus + streakBonus;
-
-    setScore((s) => { const v = Math.max(s + gained, 0); scoreRef.current = v; return v; });
+    const newScore    = Math.max(scoreRef.current + gained, 0);
+    scoreRef.current  = newScore;
+    setScore(newScore);
     spawnPop(cellIndex, `+${gained}`);
+
+    // Live PB notification
+    if (!pbBeatenRef.current && personalBest > 0 && newScore > personalBest) {
+      pbBeatenRef.current = true;
+      setPbBanner(true);
+      setTimeout(() => setPbBanner(false), 2200);
+    }
+
+    // New fastest snap notification
+    if (allTimeSnapRef.current == null || reactionRounded < allTimeSnapRef.current) {
+      allTimeSnapRef.current = reactionRounded;
+      setSnapBanner(true);
+      setTimeout(() => setSnapBanner(false), 1500);
+    }
+
+    // Daily challenge completion
+    if (!challengeTriggeredRef.current && !challengeComplete && newScore >= challengeTarget) {
+      challengeTriggeredRef.current = true;
+      setChallengeComplete(true);
+      localStorage.setItem(CHALLENGE_KEY, JSON.stringify({ date: todayISO(), completed: true }));
+      setChallengeBanner(true);
+      setTimeout(() => setChallengeBanner(false), 3000);
+    }
 
     const newStreak = streak + 1;
     setStreak(newStreak);
@@ -573,7 +677,7 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
         </div>
         <div className="hud-block">
           {personalBest > 0 && <p className="value small pb-line">PB {personalBest}</p>}
-          <div className="timebar">
+          <div className={`timebar${timeLeft <= 5 && timeLeft > 0 && status === 'playing' ? ' timebar--critical' : ''}`}>
             <div
               className={`timebar-fill${timebarBanked ? ' timebar-fill--banked' : ''}`}
               style={{ width: `${Math.min(100, (timeLeft / settings.startTime) * 100)}%` }}
@@ -585,7 +689,7 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
 
       {/* Arena */}
       <div
-        className="arena"
+        className={`arena${arenaShake ? ' arena--shake' : ''}`}
         style={{ gridTemplateColumns: `repeat(${grid.cols}, minmax(0, 1fr))` }}
         onTouchMove={(e) => e.preventDefault()}
       >
@@ -630,18 +734,36 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
         {/* Combo announcement */}
         {comboMsg && <div className="combo-msg">{comboMsg}</div>}
 
-        {/* Overlays (idle / paused / done) */}
-        {status !== 'playing' && (
+        {/* Mid-game banners */}
+        {pbBanner      && <div className="arena-banner arena-banner--pb">🏆 NEW PERSONAL BEST!</div>}
+        {streakLostMsg && <div className="arena-banner arena-banner--streak">STREAK LOST</div>}
+        {snapBanner    && <div className="arena-banner arena-banner--snap">⚡ FASTEST SNAP!</div>}
+        {challengeBanner && <div className="arena-banner arena-banner--challenge">🎯 DAILY CHALLENGE COMPLETE!</div>}
+
+        {/* Overlays */}
+        {(status === 'countdown' || status === 'paused' || status === 'idle' || status === 'done') && (
           <div className="overlay">
             <div className="overlay-card">
-              {status === 'paused' ? (
+
+              {/* ── Countdown ── */}
+              {status === 'countdown' && (
+                <p className={`countdown-num${countdown === 'GO!' ? ' countdown-num--go' : ''}`}>
+                  {countdown}
+                </p>
+              )}
+
+              {/* ── Paused ── */}
+              {status === 'paused' && (
                 <>
                   <p className="headline">Paused</p>
                   <p className="sub">Press P or Esc to continue.</p>
                   <button className="cta" onClick={resumeGame}>Resume</button>
                   <button className="mini-btn ghost" onClick={reset}>Restart</button>
                 </>
-              ) : (
+              )}
+
+              {/* ── Idle / Done ── */}
+              {(status === 'idle' || status === 'done') && (
                 <>
                   <p className="headline">{status === 'idle' ? 'Arcade Arena' : 'Run Complete'}</p>
 
@@ -675,19 +797,36 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
                             <span className="end-stat-value">{avgReaction} ms</span>
                           </div>
                         )}
-                        {personalBest > 0 && (
+                        {prevRunScoreRef.current !== null && (
                           <div className="end-stat">
-                            <span className="end-stat-label">Personal best</span>
-                            <span className="end-stat-value">{Math.max(score, personalBest)}</span>
+                            <span className="end-stat-label">vs last run</span>
+                            <span className={`end-stat-value ${score >= prevRunScoreRef.current ? 'accent' : 'end-stat-value--down'}`}>
+                              {score >= prevRunScoreRef.current ? `+${score - prevRunScoreRef.current}` : `-${prevRunScoreRef.current - score}`}
+                            </span>
+                          </div>
+                        )}
+                        {lastRank && (
+                          <div className="end-stat">
+                            <span className="end-stat-label">Global rank</span>
+                            <span className="end-stat-value accent">#{lastRank}</span>
                           </div>
                         )}
                       </div>
                     </>
                   ) : (
-                    <p className="sub">
-                      Tap green tiles fast — each hit plays a melody note.
-                      {settings.hazardChance > 0 ? ' Dodge red decoys.' : ''}
-                    </p>
+                    <>
+                      <p className="sub">
+                        Tap tiles fast — each hit plays a note.
+                        {settings.hazardChance > 0 ? ' Dodge red decoys.' : ''}
+                        {' '}Gold tiles = bonus points.
+                      </p>
+                      <div className="daily-challenge-pill">
+                        {challengeComplete
+                          ? <span className="daily-challenge-pill--done">✓ Daily challenge complete</span>
+                          : <span>Today's goal: reach <strong>{challengeTarget} pts</strong></span>
+                        }
+                      </div>
+                    </>
                   )}
 
                   <button className="cta" onClick={reset}>
@@ -695,6 +834,7 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
                   </button>
                 </>
               )}
+
             </div>
           </div>
         )}

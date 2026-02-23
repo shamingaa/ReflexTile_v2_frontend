@@ -257,8 +257,13 @@ h1 { margin: 0; font-size: 28px; letter-spacing: -0.4px; }
 /* ── Time bar ──────────────────────────────────────────────────────────── */
 .timebar { width: 100%; height: 8px; background: rgba(255,255,255,0.06); border-radius: 999px; overflow: hidden; margin-top: 6px; }
 .timebar-fill { height: 100%; background: var(--accent); transition: width 0.1s; }
-/* FIX: banked time (above startTime) shown in a cool blue to signal surplus */
 .timebar-fill--banked { background: var(--accent-2); box-shadow: 0 0 8px rgba(90,209,255,0.5); }
+.timebar--critical { animation: timerPulse 0.5s ease-in-out infinite alternate; }
+.timebar--critical .timebar-fill { background: var(--danger); }
+@keyframes timerPulse {
+  0%   { box-shadow: 0 0 0px rgba(255,95,109,0); }
+  100% { box-shadow: 0 0 8px rgba(255,95,109,0.7); }
+}
 
 /* ── Arena ─────────────────────────────────────────────────────────────── */
 .arena {
@@ -287,7 +292,12 @@ h1 { margin: 0; font-size: 28px; letter-spacing: -0.4px; }
   touch-action: manipulation;
 }
 .cell:hover { transform: translateY(-2px); }
-.cell--active { background: #3db88a; border-color: #4ecf9e; box-shadow: 0 0 18px rgba(124,243,197,0.5), 0 0 36px rgba(124,243,197,0.2); }
+.cell--active { background: #3db88a; border-color: #4ecf9e; box-shadow: 0 0 18px rgba(124,243,197,0.5), 0 0 36px rgba(124,243,197,0.2); animation: cellSpawn 0.14s ease-out; }
+@keyframes cellSpawn {
+  0%   { transform: scale(0.72); opacity: 0.5; }
+  70%  { transform: scale(1.06); }
+  100% { transform: scale(1);    opacity: 1; }
+}
 .cell--hazard { background: #ff5f6d; border-color: #ff5f6d; box-shadow: 0 0 18px rgba(255,95,109,0.7); color: #fff; }
 .cell--life { animation: lifeDrain var(--life, 1200ms) linear forwards; }
 .cell--flash-hit { position: relative; overflow: hidden; animation: pop 0.18s ease-out; box-shadow: 0 0 28px rgba(124,243,197,0.8), 0 0 60px rgba(90,209,255,0.4); background: #aafce0; }
@@ -939,3 +949,78 @@ h1 { margin: 0; font-size: 28px; letter-spacing: -0.4px; }
   0%, 100% { opacity: 0.5; }
   50%       { opacity: 1;   }
 }
+
+/* ── Arena shake ───────────────────────────────────────────────────────── */
+.arena--shake { animation: arenaShake 0.45s ease-in-out; }
+@keyframes arenaShake {
+  0%   { transform: translate(0, 0) rotate(0deg); }
+  15%  { transform: translate(-5px, 2px) rotate(-0.5deg); }
+  30%  { transform: translate(5px, -3px) rotate(0.5deg); }
+  45%  { transform: translate(-4px, 2px) rotate(-0.3deg); }
+  60%  { transform: translate(4px, -1px) rotate(0.3deg); }
+  75%  { transform: translate(-2px, 1px); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+
+/* ── Mid-game banners ──────────────────────────────────────────────────── */
+.arena-banner {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 7;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  padding: 6px 16px;
+  border-radius: 20px;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: bannerIn 0.25s ease-out;
+}
+.arena-banner--pb       { top: 22%; background: rgba(124,243,197,0.18); border: 1px solid rgba(124,243,197,0.5); color: var(--accent); }
+.arena-banner--streak   { top: 34%; background: rgba(255,95,109,0.15);  border: 1px solid rgba(255,95,109,0.4);  color: var(--danger); }
+.arena-banner--snap     { top: 46%; background: rgba(90,209,255,0.15);  border: 1px solid rgba(90,209,255,0.4);  color: var(--accent-2); }
+.arena-banner--challenge{ top: 58%; background: rgba(255,215,0,0.15);   border: 1px solid rgba(255,215,0,0.45);  color: #ffd700; }
+@keyframes bannerIn {
+  0%   { opacity: 0; transform: translateX(-50%) scale(0.8); }
+  60%  { transform: translateX(-50%) scale(1.05); }
+  100% { opacity: 1; transform: translateX(-50%) scale(1); }
+}
+
+/* ── Countdown overlay ─────────────────────────────────────────────────── */
+.countdown-num {
+  font-size: 96px;
+  font-weight: 900;
+  color: var(--accent);
+  text-shadow: 0 0 40px rgba(124,243,197,0.6);
+  animation: countPop 0.3s ease-out;
+  letter-spacing: -4px;
+}
+.countdown-num--go {
+  font-size: 64px;
+  color: #ffd700;
+  text-shadow: 0 0 40px rgba(255,215,0,0.6);
+  letter-spacing: 2px;
+}
+@keyframes countPop {
+  0%   { transform: scale(1.5); opacity: 0; }
+  60%  { transform: scale(0.95); opacity: 1; }
+  100% { transform: scale(1); }
+}
+
+/* ── Daily challenge pill ──────────────────────────────────────────────── */
+.daily-challenge-pill {
+  font-size: 13px;
+  color: var(--muted);
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 20px;
+  padding: 6px 14px;
+  margin: 4px 0 8px;
+}
+.daily-challenge-pill strong { color: var(--text); }
+.daily-challenge-pill--done { color: var(--accent); border-color: rgba(124,243,197,0.3); background: rgba(124,243,197,0.07); }
+
+/* ── End-stat down indicator ───────────────────────────────────────────── */
+.end-stat-value--down { color: var(--danger); }
