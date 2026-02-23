@@ -101,6 +101,7 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish }) {
   );
 
   const reset = () => {
+    if (!playerName || playerName.trim().length === 0) return;
     finishedRef.current = false;
     setStatus('playing');
     setTimeLeft(settings.startTime);
@@ -146,7 +147,7 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish }) {
     const onKey = (e) => {
       if (e.code === 'Space') {
         e.preventDefault();
-        if (status === 'idle' || status === 'done') reset();
+        if ((status === 'idle' || status === 'done') && playerName?.trim()) reset();
       }
       if (e.code === 'KeyP' || e.code === 'Escape') {
         if (status === 'playing') setStatus('paused');

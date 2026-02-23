@@ -4,12 +4,6 @@ import Leaderboard from './Leaderboard';
 import { fetchScores, submitScore } from './api';
 import './styles.css';
 
-const randomName = () => {
-  const animals = ['Falcon', 'Viper', 'Nova', 'Comet', 'Blitz', 'Photon', 'Raptor'];
-  const adj = ['Neon', 'Crimson', 'Silver', 'Turbo', 'Hyper', 'Quantum', 'Solar'];
-  return `${adj[Math.floor(Math.random() * adj.length)]} ${animals[Math.floor(Math.random() * animals.length)]}`;
-};
-
 const DEVICE_KEY = 'arcade_arena_device';
 const NAME_KEY = 'arcade_arena_player';
 
@@ -53,10 +47,6 @@ function App() {
     const savedName = localStorage.getItem(NAME_KEY);
     if (savedName && savedName.trim().length > 0) {
       setPlayerName(savedName);
-    } else {
-      const generated = randomName();
-      setPlayerName(generated);
-      localStorage.setItem(NAME_KEY, generated);
     }
   }, []);
 
@@ -66,6 +56,8 @@ function App() {
   };
 
   const handleFinish = async ({ score }) => {
+    const canPlay = playerName.trim().length > 0;
+    if (!canPlay) return;
     try {
       await submitScore({ playerName, score, mode, deviceId });
       loadScores(mode);
@@ -91,7 +83,7 @@ function App() {
 
       <main className="stack">
         <GameBoard
-          playerName={playerName || 'Player'}
+          playerName={playerName}
           mode={mode}
           deviceId={deviceId}
           difficulty={difficulty}
