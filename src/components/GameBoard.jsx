@@ -15,41 +15,16 @@ const COMBO_LABELS = {
   50: 'LEGENDARY',
 };
 
-// ─── Note maps ──────────────────────────────────────────────────────────────
-// C major pentatonic (C D E G A) across 5 octaves.
-// Grid reads left-to-right = C→A within the octave,
-// top-to-bottom = high octave → low octave (like looking at piano keys on their side).
-//
-// 5×5 grid: each cell maps to its own unique piano pitch.
-const NOTES_5x5 = [
-  // Row 0 (top)  — C6      D6      E6      G6      A6
-  1046.50, 1174.66, 1318.51, 1567.98, 1760.00,
-  // Row 1        — C5      D5      E5      G5      A5
-   523.25,  587.33,  659.25,  783.99,  880.00,
-  // Row 2 (mid) — C4      D4      E4      G4      A4
-   261.63,  293.66,  329.63,  392.00,  440.00,
-  // Row 3        — C3      D3      E3      G3      A3
-   130.81,  146.83,  164.81,  196.00,  220.00,
-  // Row 4 (bot) — C2      D2      E2      G2      A2
-    65.41,   73.42,   82.41,   98.00,  110.00,
+// ─── Tap melody — C minor pentatonic, mirrors the key of "Lonely at the Top" ─
+// Notes advance sequentially on every correct hit, looping through the phrase.
+const TAP_MELODY = [
+  784, 698, 622, 523,  622, 698, 784, 784,
+  698, 622, 523, 466,  523, 622, 698, 784,
+  784, 784, 698, 622,  698, 784, 932, 784,
+  698, 622, 523, 466,  523, 622, 523, 392,
+  784, 698, 784, 932,  784, 698, 622, 698,
+  622, 523, 466, 392,  466, 523, 622, 523,
 ];
-
-// 4×4 grid: 4 of the 5 pentatonic notes per row (C E G A — drops D for even spacing).
-const NOTES_4x4 = [
-  // Row 0 (top)  — C5      E5      G5      A5
-   523.25,  659.25,  783.99,  880.00,
-  // Row 1        — C4      E4      G4      A4
-   261.63,  329.63,  392.00,  440.00,
-  // Row 2        — C3      E3      G3      A3
-   130.81,  164.81,  196.00,  220.00,
-  // Row 3 (bot) — C2      E2      G2      A2
-    65.41,   82.41,   98.00,  110.00,
-];
-
-const getNoteHz = (cellIdx, grid) => {
-  const notes = grid.cols === 4 ? NOTES_4x4 : NOTES_5x5;
-  return notes[Math.min(cellIdx, notes.length - 1)] ?? 440;
-};
 
 // ─── Difficulty presets ─────────────────────────────────────────────────────
 const DIFFICULTY = {
@@ -109,10 +84,6 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
     () => localStorage.getItem('arcade_arena_sound') !== '0'
   );
   const soundRef = useRef(soundOn);
-  useEffect(() => {
-    soundRef.current = soundOn;
-    localStorage.setItem('arcade_arena_sound', soundOn ? '1' : '0');
-  }, [soundOn]);
 
   // ── Refs ─────────────────────────────────────────────────────────────────
   const spawnTimeRef     = useRef(performance.now());
@@ -123,6 +94,10 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
   const audioCtxRef      = useRef(null);
   const popIdRef         = useRef(0);
   const comboTimerRef    = useRef(null);
+  const statusRef        = useRef('idle');
+  const songPosRef       = useRef(0);      // position in TAP_MELODY sequence
+  const songRef          = useRef(null);   // HTMLAudioElement for background track
+  const songGainRef      = useRef(null);   // GainNode — controls background volume
   // Stat refs — synchronous counterparts for state; read by endRun
   const hitsRef          = useRef(0);
   const missesRef        = useRef(0);
@@ -136,13 +111,11 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
     [score, streak, settings]
   );
 
-  useEffect(() => { scoreRef.current = score; }, [score]);
-
   // ── Audio helpers ─────────────────────────────────────────────────────────
 
   const getAudioCtx = () => {
     if (typeof window === 'undefined') return null;
-    const Ctx = window.AudioContext || window.webkitAudioContext;
+    const Ctx = window.AudioContext || (window).webkitAudioContext;
     if (!Ctx) return null;
     const ctx = audioCtxRef.current || new Ctx();
     audioCtxRef.current = ctx;
@@ -150,7 +123,7 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
     return ctx;
   };
 
-  // Original UI tone (beeps for start, pause, miss, wrong-click, combos)
+  // UI beeps (start, pause, miss, wrong-click, combos)
   const playTone = (freq, durationMs = 90, volume = 0.12) => {
     if (!soundRef.current) return;
     const ctx = getAudioCtx();
@@ -167,71 +140,85 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
     osc.stop(now + durationMs / 1000);
   };
 
-  // Piano synthesizer — played on every correct tile hit.
-  // Simulates piano timbre via a triangle fundamental + sine harmonics,
-  // shaped with an ADSR envelope and a warm low-pass filter.
-  const playPianoNote = (freq, volume = 0.22) => {
+  // ── Background song helpers ───────────────────────────────────────────────
+
+  const setupSong = () => {
+    if (songRef.current) return;
+    const audio = new Audio('/Asake-Lonely-At-The-Top.mp3');
+    audio.loop    = true;
+    audio.preload = 'auto';
+    songRef.current = audio;
+    const ctx = getAudioCtx();
+    if (!ctx) return;
+    try {
+      const src  = ctx.createMediaElementSource(audio);
+      const gain = ctx.createGain();
+      gain.gain.value = soundRef.current ? 0.75 : 0;
+      src.connect(gain);
+      gain.connect(ctx.destination);
+      songGainRef.current = gain;
+    } catch (_) { /* already routed */ }
+  };
+
+  const playSong = () => {
+    setupSong();
+    if (songGainRef.current) songGainRef.current.gain.value = soundRef.current ? 0.75 : 0;
+    songRef.current?.play().catch(() => {});
+  };
+
+  const pauseSong = () => { songRef.current?.pause(); };
+
+  const stopSong = () => {
+    if (songRef.current) { songRef.current.pause(); songRef.current.currentTime = 0; }
+  };
+
+  // ── Tap melody synth — marimba-style, plays the next note in TAP_MELODY ──
+
+  const playMelodyNote = (freq, volume = 0.2) => {
     if (!soundRef.current) return;
     const ctx = getAudioCtx();
     if (!ctx) return;
     const now = ctx.currentTime;
-    const dur = 1.6;
-
-    // ADSR master envelope
-    const master = ctx.createGain();
-    master.gain.setValueAtTime(0, now);
-    master.gain.linearRampToValueAtTime(volume, now + 0.007);           // attack  ~7ms
-    master.gain.exponentialRampToValueAtTime(volume * 0.60, now + 0.07); // decay   60ms
-    master.gain.exponentialRampToValueAtTime(volume * 0.42, now + 0.28); // sustain settle
-    master.gain.exponentialRampToValueAtTime(0.0001, now + dur);         // release
-
-    // Warm low-pass (piano rolls off treble; also prevents harshness on high notes)
-    const lpf = ctx.createBiquadFilter();
-    lpf.type = 'lowpass';
-    lpf.frequency.value = Math.min(freq * 7, 7000);
-    lpf.Q.value = 0.55;
-    lpf.connect(master);
-    master.connect(ctx.destination);
-
-    // Harmonics: [frequency multiplier, relative gain, waveform]
-    // Triangle fundamental gives piano's characteristic hollow attack.
-    // Sine overtones add warmth without harshness.
-    [
-      [1,    0.55, 'triangle'],  // fundamental
-      [2,    0.22, 'sine'],      // octave
-      [3,    0.09, 'sine'],      // perfect 5th above octave
-      [4,    0.04, 'sine'],      // 2nd octave (fades under LPF at high freq)
-      [0.5,  0.06, 'sine'],      // sub-octave — adds body to bass notes
-    ].forEach(([mult, g, type]) => {
-      const osc  = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type           = type;
-      osc.frequency.value = freq * mult;
-      gain.gain.value     = g;
-      osc.connect(gain).connect(lpf);
-      osc.start(now);
-      osc.stop(now + dur + 0.05);
-    });
-  };
-
-  // Soft preview note that whispers the upcoming pitch when the tile appears.
-  // Low enough volume that it's a hint, not a spoiler.
-  const playPreviewNote = (freq) => {
-    if (!soundRef.current) return;
-    const ctx = getAudioCtx();
-    if (!ctx) return;
-    const now  = ctx.currentTime;
     const osc  = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq * 1.007, now);
+    osc.frequency.exponentialRampToValueAtTime(freq, now + 0.01);
     const gain = ctx.createGain();
-    osc.type           = 'sine';
-    osc.frequency.value = freq;
     gain.gain.setValueAtTime(0, now);
-    gain.gain.linearRampToValueAtTime(0.03, now + 0.04);   // very soft
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+    gain.gain.linearRampToValueAtTime(volume, now + 0.005);
+    gain.gain.exponentialRampToValueAtTime(volume * 0.3, now + 0.08);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.85);
+    // bright overtone for the "wood" character
+    const ot     = ctx.createOscillator();
+    ot.type = 'sine';
+    ot.frequency.value = freq * 4.0;
+    const otGain = ctx.createGain();
+    otGain.gain.setValueAtTime(volume * 0.15, now);
+    otGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.06);
     osc.connect(gain).connect(ctx.destination);
-    osc.start(now);
-    osc.stop(now + 0.25);
+    ot.connect(otGain).connect(ctx.destination);
+    osc.start(now); osc.stop(now + 0.9);
+    ot.start(now);  ot.stop(now + 0.08);
   };
+
+  useEffect(() => { scoreRef.current = score; }, [score]);
+  useEffect(() => { statusRef.current = status; }, [status]);
+
+  // Drive background song with game state
+  useEffect(() => {
+    if (status === 'playing')     playSong();
+    else if (status === 'paused') pauseSong();
+    else                          stopSong();
+  }, [status]); // eslint-disable-line
+
+  // Sound toggle — mute/unmute background, stop if turning off
+  useEffect(() => {
+    soundRef.current = soundOn;
+    localStorage.setItem('arcade_arena_sound', soundOn ? '1' : '0');
+    if (songGainRef.current) songGainRef.current.gain.value = soundOn ? 0.75 : 0;
+    if (!soundOn) pauseSong();
+    else if (statusRef.current === 'playing') playSong();
+  }, [soundOn]); // eslint-disable-line
 
   // ── Core helpers ──────────────────────────────────────────────────────────
 
@@ -295,8 +282,6 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
       const next = pickCell(prev, [], cellCount);
       spawnTimeRef.current = performance.now();
       setHazardCell(Math.random() < settings.hazardChance ? pickCell(next, [next], cellCount) : null);
-      // Whisper the upcoming note so the tile "rings" as it appears
-      playPreviewNote(getNoteHz(next, grid));
       return next;
     });
   };
@@ -308,6 +293,7 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
     fastestHitRef.current = null;
     totalReactionRef.current = 0;
     maxStreakRef.current = 0;
+    songPosRef.current = 0;
   };
 
   const reset = () => {
@@ -389,7 +375,8 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
   useEffect(() => () => {
     Object.values(flashTimeoutsRef.current).forEach(clearTimeout);
     if (comboTimerRef.current) clearTimeout(comboTimerRef.current);
-  }, []);
+    stopSong();
+  }, []); // eslint-disable-line
 
   // Reset when difficulty changes
   useEffect(() => {
@@ -473,8 +460,9 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
 
     flashCell(cellIndex, 'hit');
 
-    // Play the piano note mapped to this cell's grid position
-    playPianoNote(getNoteHz(cellIndex, grid));
+    // Play the next melody note on top of the background track
+    playMelodyNote(TAP_MELODY[songPosRef.current % TAP_MELODY.length]);
+    songPosRef.current++;
 
     const speedBonus  = Math.max(2, Math.round((1200 - reaction) / 30));
     const streakBonus = Math.max(0, streak - 1) * 4;
@@ -621,7 +609,7 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
                     </>
                   ) : (
                     <p className="sub">
-                      Tap green tiles fast — each one plays a piano note.
+                      Tap green tiles fast — each hit plays a melody note.
                       {settings.hazardChance > 0 ? ' Dodge red decoys.' : ''}
                     </p>
                   )}
@@ -643,9 +631,12 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
           onClick={() => setSoundOn((v) => !v)}
           title="Toggle sound (M)"
         >
-          <span className="sound-icon">{soundOn ? '♪' : '♪'}</span>
+          <span className="sound-icon">♪</span>
           {soundOn ? 'Sound on' : 'Sound off'}
         </button>
+        {soundOn && (
+          <span className="now-playing">Lonely at the Top – Asake</span>
+        )}
       </div>
     </div>
   );

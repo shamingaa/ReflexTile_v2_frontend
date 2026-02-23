@@ -858,7 +858,9 @@ h1 { margin: 0; font-size: 28px; letter-spacing: -0.4px; }
 /* ── Sound toggle bar ──────────────────────────────────────────────────── */
 .sound-bar {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
   margin-top: 10px;
 }
 
@@ -897,4 +899,17 @@ h1 { margin: 0; font-size: 28px; letter-spacing: -0.4px; }
 .sound-icon {
   font-size: 15px;
   line-height: 1;
+}
+
+.now-playing {
+  font-size: 12px;
+  color: var(--muted);
+  letter-spacing: 0.05em;
+  text-align: center;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.5; }
+  50%       { opacity: 1;   }
 }
