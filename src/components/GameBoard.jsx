@@ -15,6 +15,15 @@ const COMBO_LABELS = {
   50: 'LEGENDARY',
 };
 
+// ─── Logo bonus tile ────────────────────────────────────────────────────────
+const LOGOS = [
+  { src: '/logo_one.png', brand: 'Tuberway'  },
+  { src: '/logo_two.png', brand: '1Percent' },
+];
+const LOGO_BONUS = 25;    // points for tapping the logo
+const LOGO_TTL   = 2200;  // ms before it auto-expires
+const LOGO_EVERY = [8, 12]; // spawn after [min, max] correct hits
+
 // ─── Tap melody — C minor pentatonic, mirrors the key of "Lonely at the Top" ─
 // Notes advance sequentially on every correct hit, looping through the phrase.
 const TAP_MELODY = [
@@ -78,6 +87,7 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
   const [totalReactionMs, setTotalReactionMs] = useState(0);
   const [pops, setPops]           = useState([]);
   const [comboMsg, setComboMsg]   = useState('');
+  const [logoTile, setLogoTile]   = useState(null); // { cell, logo } | null
 
   // Sound toggle — persisted to localStorage
   const [soundOn, setSoundOn] = useState(
@@ -98,6 +108,9 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
   const songPosRef       = useRef(0);      // position in TAP_MELODY sequence
   const songRef          = useRef(null);   // HTMLAudioElement for background track
   const songGainRef      = useRef(null);   // GainNode — controls background volume
+  const logoTimerRef     = useRef(null);   // auto-expire timer for logo tile
+  const nextLogoAtRef    = useRef(8 + Math.floor(Math.random() * 5)); // hit count for first logo
+  const logoIdxRef       = useRef(0);      // alternates between logo_one / logo_two
   // Stat refs — synchronous counterparts for state; read by endRun
   const hitsRef          = useRef(0);
   const missesRef        = useRef(0);
@@ -231,12 +244,34 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
     }, FLASH_DURATION);
   };
 
-  const spawnPop = (cellIdx, text) => {
+  const spawnPop = (cellIdx, text, color) => {
     const id  = ++popIdRef.current;
     const col = cellIdx % grid.cols;
     const row = Math.floor(cellIdx / grid.cols);
-    setPops((prev) => [...prev, { id, text, x: ((col + 0.5) / grid.cols) * 100, y: ((row + 0.5) / grid.rows) * 100 }]);
+    setPops((prev) => [...prev, { id, text, color: color || null, x: ((col + 0.5) / grid.cols) * 100, y: ((row + 0.5) / grid.rows) * 100 }]);
     setTimeout(() => setPops((prev) => prev.filter((p) => p.id !== id)), 750);
+  };
+
+  // ── Logo tile helpers ───────────────────────────────────────────────────
+
+  const clearLogoTile = () => {
+    if (logoTimerRef.current) { clearTimeout(logoTimerRef.current); logoTimerRef.current = null; }
+    setLogoTile(null);
+  };
+
+  const trySpawnLogo = (hitCount, bannedCells) => {
+    if (hitCount < nextLogoAtRef.current) return;
+    const interval = LOGO_EVERY[0] + Math.floor(Math.random() * (LOGO_EVERY[1] - LOGO_EVERY[0] + 1));
+    nextLogoAtRef.current = hitCount + interval;
+    const cell  = pickCell(-1, bannedCells.filter((x) => x != null), cellCount);
+    const entry = LOGOS[logoIdxRef.current % LOGOS.length];
+    logoIdxRef.current++;
+    clearLogoTile();
+    setLogoTile({ cell, src: entry.src, brand: entry.brand });
+    logoTimerRef.current = setTimeout(() => {
+      setLogoTile(null);
+      logoTimerRef.current = null;
+    }, LOGO_TTL);
   };
 
   const showCombo = (newStreak) => {
@@ -282,6 +317,14 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
       const next = pickCell(prev, [], cellCount);
       spawnTimeRef.current = performance.now();
       setHazardCell(Math.random() < settings.hazardChance ? pickCell(next, [next], cellCount) : null);
+      // Evict logo tile if it would overlap with the new active cell
+      setLogoTile((lt) => {
+        if (lt && lt.cell === next) {
+          if (logoTimerRef.current) { clearTimeout(logoTimerRef.current); logoTimerRef.current = null; }
+          return null;
+        }
+        return lt;
+      });
       return next;
     });
   };
@@ -294,10 +337,13 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
     totalReactionRef.current = 0;
     maxStreakRef.current = 0;
     songPosRef.current = 0;
+    nextLogoAtRef.current = 8 + Math.floor(Math.random() * 5);
+    logoIdxRef.current = 0;
   };
 
   const reset = () => {
     if (!playerName || playerName.trim().length === 0) return;
+    clearLogoTile();
     finishedRef.current = false;
     const startT = settings.startTime;
     timeLeftRef.current = startT;
@@ -375,6 +421,7 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
   useEffect(() => () => {
     Object.values(flashTimeoutsRef.current).forEach(clearTimeout);
     if (comboTimerRef.current) clearTimeout(comboTimerRef.current);
+    if (logoTimerRef.current)  clearTimeout(logoTimerRef.current);
     stopSong();
   }, []); // eslint-disable-line
 
@@ -421,6 +468,18 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
   const registerHit = (cellIndex) => {
     if (status !== 'playing') return;
 
+    // ── Logo bonus tile ──
+    if (cellIndex === logoTile?.cell) {
+      const brand = logoTile.brand;
+      clearLogoTile();
+      setScore((s) => { const v = s + LOGO_BONUS; scoreRef.current = v; return v; });
+      spawnPop(cellIndex, brand, '#ffd700');
+      flashCell(cellIndex, 'logo');
+      playTone(1047, 200, 0.22);
+      if (navigator?.vibrate) navigator.vibrate([25, 15, 25]);
+      return;
+    }
+
     // ── Hazard tile ──
     if (cellIndex === hazardCell) {
       flashCell(cellIndex, 'hazard');
@@ -459,6 +518,9 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
     }
 
     flashCell(cellIndex, 'hit');
+
+    // Maybe spawn a logo bonus tile
+    trySpawnLogo(hitsRef.current, [cellIndex, hazardCell]);
 
     // Play the next melody note on top of the background track
     playMelodyNote(TAP_MELODY[songPosRef.current % TAP_MELODY.length]);
@@ -534,19 +596,34 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
             type="button"
             className={[
               'cell',
-              idx === activeCell  ? 'cell--active cell--life' : '',
-              idx === hazardCell  ? 'cell--hazard'            : '',
-              flashMap[idx]       ? `cell--flash-${flashMap[idx]}` : '',
+              idx === activeCell     ? 'cell--active cell--life' : '',
+              idx === hazardCell     ? 'cell--hazard'            : '',
+              idx === logoTile?.cell ? 'cell--logo'              : '',
+              flashMap[idx]          ? `cell--flash-${flashMap[idx]}` : '',
             ].join(' ').trim()}
             style={idx === activeCell ? { '--life': `${difficultyWindow}ms` } : undefined}
             onPointerDown={(e) => { e.preventDefault(); registerHit(idx); }}
-            aria-label={idx === activeCell ? 'Active target' : idx === hazardCell ? 'Hazard' : 'Tile'}
-          />
+            aria-label={idx === activeCell ? 'Active target' : idx === hazardCell ? 'Hazard' : idx === logoTile?.cell ? 'Bonus' : 'Tile'}
+          >
+            {idx === logoTile?.cell && (
+              <img
+                src={logoTile.src}
+                alt={logoTile.brand}
+                className="cell-logo-img"
+                style={logoTile.src === '/logo_two.png' ? { transform: 'scale(1.25)' } : { transform: 'scale(1.15)' }}
+                draggable={false}
+              />
+            )}
+          </button>
         ))}
 
         {/* Floating score popups */}
         {pops.map((pop) => (
-          <div key={pop.id} className="score-pop" style={{ left: `${pop.x}%`, top: `${pop.y}%` }}>
+          <div
+            key={pop.id}
+            className="score-pop"
+            style={{ left: `${pop.x}%`, top: `${pop.y}%`, ...(pop.color ? { color: pop.color, textShadow: `0 0 12px ${pop.color}` } : {}) }}
+          >
             {pop.text}
           </div>
         ))}
