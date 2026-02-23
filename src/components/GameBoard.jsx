@@ -7,6 +7,14 @@ const getGrid = () => {
   return window.innerWidth <= 540 ? { cols: 4, rows: 4 } : { cols: 5, rows: 5 };
 };
 
+const COMBO_LABELS = {
+  5: 'HOT',
+  10: 'ON FIRE',
+  20: 'UNSTOPPABLE',
+  30: 'GODLIKE',
+  50: 'LEGENDARY',
+};
+
 const DIFFICULTY = {
   normal: {
     startTime: 30,
@@ -27,7 +35,7 @@ const DIFFICULTY = {
   hard: {
     startTime: 25,
     missPenalty: 4.5,
-    hazardChance: 0,
+    hazardChance: 0.08,
     timeRewardCap: 40,
     paceBase: 1500,
     paceFloor: 700,
@@ -43,7 +51,7 @@ const DIFFICULTY = {
   extreme: {
     startTime: 20,
     missPenalty: 5,
-    hazardChance: 0,
+    hazardChance: 0.14,
     timeRewardCap: 34,
     paceBase: 1250,
     paceFloor: 550,
@@ -71,142 +79,49 @@ const pickCell = (previous, banned = [], count) => {
 
 const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
-function GameBoard({ playerName, mode, difficulty = 'normal', onFinish }) {
-  const [grid, setGrid] = useState(getGrid());
+function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personalBest = 0 }) {
+  const [grid, setGrid] = useState(getGrid);
   const cellCount = grid.cols * grid.rows;
   const [status, setStatus] = useState('idle');
-  const [timeLeft, setTimeLeft] = useState(DIFFICULTY[difficulty]?.startTime || DIFFICULTY.normal.startTime);
+  const [timeLeft, setTimeLeft] = useState(() => DIFFICULTY[difficulty]?.startTime ?? DIFFICULTY.normal.startTime);
   const [score, setScore] = useState(0);
   const [streak, setStreak] = useState(0);
   const [misses, setMisses] = useState(0);
+  const [hits, setHits] = useState(0);
   const [activeCell, setActiveCell] = useState(() => pickCell(-1, [], cellCount));
   const [hazardCell, setHazardCell] = useState(null);
   const [flashMap, setFlashMap] = useState({});
-  const [lastHitSpeed, setLastHitSpeed] = useState(null);
+  const [fastestHit, setFastestHit] = useState(null);
+  const [totalReactionMs, setTotalReactionMs] = useState(0);
+  const [pops, setPops] = useState([]);
+  const [comboMsg, setComboMsg] = useState('');
+
   const spawnTimeRef = useRef(performance.now());
   const finishedRef = useRef(false);
-  const scoreRef = useRef(score);
+  const scoreRef = useRef(0);
+  // FIX: timeLeftRef enables synchronous time reads inside applyTimePenalty
+  const timeLeftRef = useRef(DIFFICULTY[difficulty]?.startTime ?? DIFFICULTY.normal.startTime);
   const flashTimeoutsRef = useRef({});
   const audioCtxRef = useRef(null);
+  const popIdRef = useRef(0);
+  const comboTimerRef = useRef(null);
 
-  useEffect(() => {
-    scoreRef.current = score;
-  }, [score]);
-
-  const settings = useMemo(() => DIFFICULTY[difficulty] || DIFFICULTY.normal, [difficulty]);
+  const settings = useMemo(() => DIFFICULTY[difficulty] ?? DIFFICULTY.normal, [difficulty]);
 
   const difficultyWindow = useMemo(
-    () => Math.max(settings.paceFloor, settings.paceBase - score * settings.paceScoreFactor - streak * settings.paceStreakFactor),
+    () => Math.max(
+      settings.paceFloor,
+      settings.paceBase - score * settings.paceScoreFactor - streak * settings.paceStreakFactor
+    ),
     [score, streak, settings]
   );
 
-  const reset = () => {
-    if (!playerName || playerName.trim().length === 0) return;
-    finishedRef.current = false;
-    setStatus('playing');
-    setTimeLeft(settings.startTime);
-    setScore(0);
-    setStreak(0);
-    setMisses(0);
-    setFlashMap({});
-    const next = pickCell(-1, [], cellCount);
-    spawnTimeRef.current = performance.now();
-    setActiveCell(next);
-    setHazardCell(settings.hazardChance > 0 && Math.random() < settings.hazardChance ? pickCell(next, [next], cellCount) : null);
-    setLastHitSpeed(null);
-    playTone(640, 120, 0.16);
-  };
-
-  useEffect(() => {
-    if (status !== 'playing') return undefined;
-    const id = setInterval(() => {
-      setTimeLeft((prev) => {
-        const next = +(prev - 0.1).toFixed(2);
-        if (next <= 0) {
-          clearInterval(id);
-          endRun();
-          return 0;
-        }
-        return next;
-      });
-    }, 100);
-    return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status]);
-
-  useEffect(() => {
-    if (status !== 'playing') return undefined;
-    const timeout = setTimeout(() => {
-      registerMiss();
-    }, difficultyWindow);
-    return () => clearTimeout(timeout);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status, activeCell, difficultyWindow]);
-
-  useEffect(() => {
-    const onKey = (e) => {
-      if (e.code === 'Space') {
-        e.preventDefault();
-        if ((status === 'idle' || status === 'done') && playerName?.trim()) reset();
-      }
-      if (e.code === 'KeyP' || e.code === 'Escape') {
-        if (status === 'playing') setStatus('paused');
-        else if (status === 'paused') setStatus('playing');
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  });
-
-  useEffect(() => () => {
-    Object.values(flashTimeoutsRef.current).forEach((id) => clearTimeout(id));
-  }, []);
-
-  useEffect(() => {
-    if (status === 'playing' && timeLeft <= 0) {
-      endRun();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeLeft, status]);
-
-  useEffect(() => {
-    finishedRef.current = false;
-    setStatus('idle');
-    setTimeLeft(settings.startTime);
-    setScore(0);
-    setStreak(0);
-    setMisses(0);
-    setFlashMap({});
-    setActiveCell(pickCell(-1, [], cellCount));
-    setHazardCell(null);
-  }, [settings, cellCount]);
-
-  useEffect(() => {
-    const onResize = () => {
-      const next = getGrid();
-      setGrid((prev) => (prev.cols === next.cols && prev.rows === next.rows ? prev : next));
-    };
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
-
-  const applyTimePenalty = (amount) => {
-    let ended = false;
-    setTimeLeft((t) => {
-      const next = clamp(t - amount, 0, 999);
-      if (next <= 0) ended = true;
-      return next;
-    });
-    if (ended) {
-      endRun();
-      return true;
-    }
-    return false;
-  };
+  // Keep scoreRef in sync so endRun always submits the latest score
+  useEffect(() => { scoreRef.current = score; }, [score]);
 
   const playTone = (freq, durationMs = 90, volume = 0.12) => {
     if (typeof window === 'undefined') return;
-    const Ctx = window.AudioContext || window.webkitAudioContext;
+    const Ctx = window.AudioContext || (window).webkitAudioContext;
     if (!Ctx) return;
     const ctx = audioCtxRef.current || new Ctx();
     audioCtxRef.current = ctx;
@@ -225,17 +140,48 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish }) {
 
   const flashCell = (cell, type) => {
     if (cell == null) return;
-    if (flashTimeoutsRef.current[cell]) {
-      clearTimeout(flashTimeoutsRef.current[cell]);
-    }
+    if (flashTimeoutsRef.current[cell]) clearTimeout(flashTimeoutsRef.current[cell]);
     setFlashMap((prev) => ({ ...prev, [cell]: type }));
     flashTimeoutsRef.current[cell] = setTimeout(() => {
-      setFlashMap((prev) => {
-        const next = { ...prev };
-        delete next[cell];
-        return next;
-      });
+      setFlashMap((prev) => { const next = { ...prev }; delete next[cell]; return next; });
     }, FLASH_DURATION);
+  };
+
+  const spawnPop = (cellIdx, text) => {
+    const id = ++popIdRef.current;
+    const col = cellIdx % grid.cols;
+    const row = Math.floor(cellIdx / grid.cols);
+    const x = ((col + 0.5) / grid.cols) * 100;
+    const y = ((row + 0.5) / grid.rows) * 100;
+    setPops((prev) => [...prev, { id, text, x, y }]);
+    setTimeout(() => setPops((prev) => prev.filter((p) => p.id !== id)), 750);
+  };
+
+  const showCombo = (newStreak) => {
+    const label = COMBO_LABELS[newStreak];
+    if (!label) return;
+    if (comboTimerRef.current) clearTimeout(comboTimerRef.current);
+    setComboMsg(label);
+    playTone(newStreak >= 20 ? 1000 : 820, 220, 0.18);
+    comboTimerRef.current = setTimeout(() => setComboMsg(''), 1200);
+  };
+
+  const endRun = () => {
+    if (finishedRef.current) return;
+    finishedRef.current = true;
+    setStatus('done');
+    onFinish?.({ score: scoreRef.current, playerName, mode });
+  };
+
+  // FIX: use timeLeftRef for synchronous access — the old pattern (reading a local var
+  // set inside setTimeLeft's updater) was broken because setState is async/batched,
+  // so `ended` was always false and endRun() was never called from here.
+  const applyTimePenalty = (amount) => {
+    const newTime = Math.max(0, timeLeftRef.current - amount);
+    timeLeftRef.current = newTime;
+    setTimeLeft(newTime);
+    if (newTime <= 0) { endRun(); return true; }
+    return false;
   };
 
   const spawnNewTarget = () => {
@@ -247,12 +193,107 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish }) {
     });
   };
 
-  const endRun = () => {
-    if (finishedRef.current) return;
-    finishedRef.current = true;
-    setStatus('done');
-    onFinish?.({ score: scoreRef.current, playerName, mode });
+  const reset = () => {
+    if (!playerName || playerName.trim().length === 0) return;
+    finishedRef.current = false;
+    const startT = settings.startTime;
+    timeLeftRef.current = startT;
+    scoreRef.current = 0;
+    setStatus('playing');
+    setTimeLeft(startT);
+    setScore(0);
+    setStreak(0);
+    setMisses(0);
+    setHits(0);
+    setFastestHit(null);
+    setTotalReactionMs(0);
+    setPops([]);
+    setComboMsg('');
+    setFlashMap({});
+    const next = pickCell(-1, [], cellCount);
+    spawnTimeRef.current = performance.now();
+    setActiveCell(next);
+    setHazardCell(settings.hazardChance > 0 && Math.random() < settings.hazardChance
+      ? pickCell(next, [next], cellCount)
+      : null);
+    playTone(640, 120, 0.16);
   };
+
+  // Timer countdown
+  useEffect(() => {
+    if (status !== 'playing') return undefined;
+    const id = setInterval(() => {
+      setTimeLeft((prev) => {
+        const next = +(prev - 0.1).toFixed(2);
+        timeLeftRef.current = next;
+        if (next <= 0) { clearInterval(id); endRun(); return 0; }
+        return next;
+      });
+    }, 100);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
+
+  // Miss timeout — restarts whenever activeCell or difficultyWindow changes
+  useEffect(() => {
+    if (status !== 'playing') return undefined;
+    const timeout = setTimeout(() => registerMiss(), difficultyWindow);
+    return () => clearTimeout(timeout);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status, activeCell, difficultyWindow]);
+
+  // FIX: was missing dependency array — re-created on every render, hammering addEventListener
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.code === 'Space') {
+        e.preventDefault();
+        if ((status === 'idle' || status === 'done') && playerName?.trim()) reset();
+      }
+      if (e.code === 'KeyP' || e.code === 'Escape') {
+        if (status === 'playing') setStatus('paused');
+        else if (status === 'paused') setStatus('playing');
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [status, playerName]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Cleanup flash + combo timers on unmount
+  useEffect(() => () => {
+    Object.values(flashTimeoutsRef.current).forEach(clearTimeout);
+    if (comboTimerRef.current) clearTimeout(comboTimerRef.current);
+  }, []);
+
+  // Reset game when difficulty changes
+  useEffect(() => {
+    finishedRef.current = false;
+    const startT = settings.startTime;
+    timeLeftRef.current = startT;
+    scoreRef.current = 0;
+    setStatus('idle');
+    setTimeLeft(startT);
+    setScore(0);
+    setStreak(0);
+    setMisses(0);
+    setHits(0);
+    setFastestHit(null);
+    setTotalReactionMs(0);
+    setPops([]);
+    setComboMsg('');
+    setFlashMap({});
+    setActiveCell(pickCell(-1, [], cellCount));
+    setHazardCell(null);
+  }, [settings, cellCount]);
+
+  // Window resize — update grid dimensions
+  useEffect(() => {
+    const onResize = () => {
+      const next = getGrid();
+      setGrid((prev) => (prev.cols === next.cols && prev.rows === next.rows ? prev : next));
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   const registerMiss = () => {
     if (status !== 'playing') return;
@@ -264,80 +305,96 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish }) {
     if (!ended) spawnNewTarget();
   };
 
-  const pauseGame = () => {
-    if (status !== 'playing') return;
-    setStatus('paused');
-    playTone(440, 120, 0.1);
-  };
-
-  const resumeGame = () => {
-    if (status !== 'paused') return;
-    setStatus('playing');
-    playTone(520, 120, 0.1);
-  };
+  const resumeGame = () => { if (status === 'paused') { setStatus('playing'); playTone(520, 120, 0.1); } };
 
   const registerHit = (cellIndex) => {
     if (status !== 'playing') return;
+
     if (cellIndex === hazardCell) {
       flashCell(cellIndex, 'hazard');
       playTone(140, 160, 0.14);
       setHazardCell(null);
       setStreak(0);
-      setScore((s) => Math.max(s - 10, 0));
+      setScore((s) => { const v = Math.max(s - 10, 0); scoreRef.current = v; return v; });
       const ended = applyTimePenalty(settings.missPenalty + 1);
       if (!ended) spawnNewTarget();
       return;
     }
+
     if (cellIndex !== activeCell) {
       setStreak(0);
       flashCell(cellIndex, 'miss');
       playTone(210, 110, 0.12);
-      applyTimePenalty(settings.wrongClickPenalty || 2.5);
+      // FIX: was `|| 2.5` which would fall through on wrongClickPenalty=0; use ?? instead
+      applyTimePenalty(settings.wrongClickPenalty ?? 2.5);
       if (navigator?.vibrate) navigator.vibrate(70);
       return;
     }
 
     const reaction = performance.now() - spawnTimeRef.current;
-    setLastHitSpeed(Math.round(reaction));
+
+    // FIX: was setLastHitSpeed on every hit — showed the last hit not the fastest.
+    // Now track the minimum reaction across the entire run.
+    setFastestHit((prev) => (prev === null ? Math.round(reaction) : Math.min(prev, Math.round(reaction))));
+    setTotalReactionMs((prev) => prev + reaction);
+    setHits((prev) => prev + 1);
+
     flashCell(cellIndex, 'hit');
     playTone(760 - Math.min(reaction, 900) / 3, 90, 0.12);
 
-    setScore((s) => {
-      const speedBonus = Math.max(2, Math.round((1200 - reaction) / 30));
-      const streakBonus = Math.max(0, streak - 1) * 4;
-      const newScore = s + 15 + speedBonus + streakBonus;
-      return Math.max(newScore, 0);
-    });
+    const speedBonus = Math.max(2, Math.round((1200 - reaction) / 30));
+    const streakBonus = Math.max(0, streak - 1) * 4;
+    const gained = 15 + speedBonus + streakBonus;
 
-    setStreak((s) => s + 1);
+    setScore((s) => { const v = Math.max(s + gained, 0); scoreRef.current = v; return v; });
+    spawnPop(cellIndex, `+${gained}`);
+
+    const newStreak = streak + 1;
+    setStreak(newStreak);
+    showCombo(newStreak);
+
     const timeReward = Math.max(
       settings.rewardFloor,
       1.25 - reaction / settings.rewardSlope - streak * settings.rewardStreakFactor
     );
     const gain = Math.max(settings.minGain, timeReward + settings.rewardBonus);
-    setTimeLeft((t) => clamp(t + gain, 0, settings.timeRewardCap));
+    const newTime = clamp(timeLeftRef.current + gain, 0, settings.timeRewardCap);
+    timeLeftRef.current = newTime;
+    setTimeLeft(newTime);
+
     spawnNewTarget();
   };
 
-  const statusLabel =
-    status === 'idle' ? 'Ready' : status === 'playing' ? 'Go!' : status === 'paused' ? 'Paused' : 'Finished';
+  const totalAttempts = hits + misses;
+  const accuracy = totalAttempts > 0 ? Math.round((hits / totalAttempts) * 100) : null;
+  const avgReaction = hits > 0 ? Math.round(totalReactionMs / hits) : null;
+  const isNewBest = status === 'done' && personalBest > 0 && score > personalBest;
+  const isFirstBest = status === 'done' && personalBest === 0 && score > 0;
+
+  // FIX: timebar shows surplus time (above startTime) in a distinct color
+  const timebarBanked = timeLeft > settings.startTime;
 
   return (
     <div className="game-panel">
       <div className="hud hud--compact">
         <div className="hud-block">
           <p className="label">Player</p>
-          <p className="value">{playerName}</p>
+          <p className="value">{playerName || '—'}</p>
         </div>
         <div className="hud-block">
           <p className="label">Score</p>
           <p className="value score">{score}</p>
+          {streak >= 3 && status === 'playing' && (
+            <p className="value small" style={{ color: 'var(--accent)', marginTop: 2 }}>x{streak}</p>
+          )}
         </div>
         <div className="hud-block">
-          <p className="label">Time</p>
+          {personalBest > 0 && (
+            <p className="value small pb-line">PB {personalBest}</p>
+          )}
           <div className="timebar">
             <div
-              className="timebar-fill"
+              className={`timebar-fill${timebarBanked ? ' timebar-fill--banked' : ''}`}
               style={{ width: `${Math.min(100, (timeLeft / settings.startTime) * 100)}%` }}
             />
           </div>
@@ -353,40 +410,92 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish }) {
           <button
             key={idx}
             type="button"
-            className={`cell ${idx === activeCell ? 'cell--active' : ''} ${
-              idx === hazardCell ? 'cell--hazard' : ''
-            } ${flashMap[idx] ? `cell--flash-${flashMap[idx]}` : ''} ${
-              idx === activeCell ? 'cell--life' : ''
-            }`}
+            className={[
+              'cell',
+              idx === activeCell ? 'cell--active cell--life' : '',
+              idx === hazardCell ? 'cell--hazard' : '',
+              flashMap[idx] ? `cell--flash-${flashMap[idx]}` : '',
+            ].join(' ').trim()}
             style={idx === activeCell ? { '--life': `${difficultyWindow}ms` } : undefined}
-            onPointerDown={(e) => {
-              e.preventDefault();
-              registerHit(idx);
-            }}
+            onPointerDown={(e) => { e.preventDefault(); registerHit(idx); }}
             aria-label={idx === activeCell ? 'Active target' : idx === hazardCell ? 'Hazard' : 'Tile'}
           />
         ))}
+
+        {/* Floating score popups */}
+        {pops.map((pop) => (
+          <div
+            key={pop.id}
+            className="score-pop"
+            style={{ left: `${pop.x}%`, top: `${pop.y}%` }}
+          >
+            {pop.text}
+          </div>
+        ))}
+
+        {/* Combo announcement */}
+        {comboMsg && <div className="combo-msg">{comboMsg}</div>}
+
         {status !== 'playing' && (
           <div className="overlay">
             <div className="overlay-card">
               {status === 'paused' ? (
                 <>
                   <p className="headline">Paused</p>
-                  <p className="sub">Hit Resume or press P/Esc to continue.</p>
+                  <p className="sub">Press P or Esc to continue.</p>
                   <button className="cta" onClick={resumeGame}>Resume</button>
-                  <p className="sub small">Restart clears your score.</p>
                   <button className="mini-btn ghost" onClick={reset}>Restart</button>
                 </>
               ) : (
                 <>
                   <p className="headline">{status === 'idle' ? 'Arcade Arena' : 'Run Complete'}</p>
-                  <p className="sub">Tap green orbs fast. Avoid red decoys - they drain 5s.</p>
-                  <button className="cta" onClick={reset}>
-                    {status === 'idle' ? 'Start' : 'Play Again (Space)'}
-                  </button>
-                  {lastHitSpeed && status !== 'idle' && (
-                    <p className="sub">Fastest snap: {lastHitSpeed} ms</p>
+
+                  {status === 'done' ? (
+                    <>
+                      {(isNewBest || isFirstBest) && (
+                        <p className="new-best-badge">{isFirstBest ? 'FIRST SCORE SET' : 'NEW PERSONAL BEST'}</p>
+                      )}
+                      <div className="end-stats">
+                        <div className="end-stat">
+                          <span className="end-stat-label">Score</span>
+                          <span className="end-stat-value accent">{score}</span>
+                        </div>
+                        {accuracy !== null && (
+                          <div className="end-stat">
+                            <span className="end-stat-label">Accuracy</span>
+                            <span className="end-stat-value">{accuracy}%</span>
+                          </div>
+                        )}
+                        {fastestHit !== null && (
+                          <div className="end-stat">
+                            <span className="end-stat-label">Best snap</span>
+                            <span className="end-stat-value">{fastestHit} ms</span>
+                          </div>
+                        )}
+                        {avgReaction !== null && (
+                          <div className="end-stat">
+                            <span className="end-stat-label">Avg reaction</span>
+                            <span className="end-stat-value">{avgReaction} ms</span>
+                          </div>
+                        )}
+                        {personalBest > 0 && (
+                          <div className="end-stat">
+                            <span className="end-stat-label">Personal best</span>
+                            <span className="end-stat-value">{Math.max(score, personalBest)}</span>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <p className="sub">
+                      Tap green orbs fast.
+                      {settings.hazardChance > 0 ? ' Dodge red decoys — they drain time.' : ''}
+                    </p>
                   )}
+
+                  <button className="cta" onClick={reset}>
+                    {status === 'idle' ? 'Start' : 'Play Again  (Space)'}
+                  </button>
                 </>
               )}
             </div>
