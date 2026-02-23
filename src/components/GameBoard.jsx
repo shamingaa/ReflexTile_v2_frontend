@@ -352,14 +352,14 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish }) {
         {[...Array(cellCount)].map((_, idx) => (
           <button
             key={idx}
+            type="button"
             className={`cell ${idx === activeCell ? 'cell--active' : ''} ${
               idx === hazardCell ? 'cell--hazard' : ''
             } ${flashMap[idx] ? `cell--flash-${flashMap[idx]}` : ''} ${
               idx === activeCell ? 'cell--life' : ''
             }`}
             style={idx === activeCell ? { '--life': `${difficultyWindow}ms` } : undefined}
-            onPointerDown={() => registerHit(idx)}
-            onClick={(e) => {
+            onPointerDown={(e) => {
               e.preventDefault();
               registerHit(idx);
             }}
