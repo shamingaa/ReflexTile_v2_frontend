@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { trackLogoTap } from '../api';
 
 const FLASH_DURATION = 180;
 
@@ -86,7 +87,7 @@ const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
 
 // ─── Component ──────────────────────────────────────────────────────────────
 
-function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personalBest = 0, lastRank = null }) {
+function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personalBest = 0, lastRank = null, deviceId = '' }) {
   const [grid, setGrid]           = useState(getGrid);
   const cellCount                 = grid.cols * grid.rows;
   const [status, setStatus]       = useState('idle');
@@ -148,6 +149,7 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
     } catch { return null; }
   })());
   const prevRunScoreRef      = useRef(null);       // score of the run before this one
+  const logoTapsRef          = useRef(0);          // logo tiles tapped this run
   // Stat refs — synchronous counterparts for state; read by endRun
   const hitsRef          = useRef(0);
   const missesRef        = useRef(0);
@@ -372,6 +374,7 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
       fastestHit:  fastestHitRef.current,
       avgReaction: totalHits > 0 ? Math.round(totalReactionRef.current / totalHits) : null,
       maxStreak:   maxStreakRef.current,
+      logoTaps:    logoTapsRef.current,
     });
   };
 
@@ -409,6 +412,7 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
     totalReactionRef.current = 0;
     maxStreakRef.current = 0;
     songPosRef.current = 0;
+    logoTapsRef.current = 0;
     nextLogoAtRef.current = 4 + Math.floor(Math.random() * 3);
     logoIdxRef.current = 0;
     pbBeatenRef.current = false;
@@ -556,6 +560,8 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
       flashCell(cellIndex, 'logo');
       playTone(1047, 200, 0.22);
       if (navigator?.vibrate) navigator.vibrate([25, 15, 25]);
+      logoTapsRef.current += 1;
+      trackLogoTap(brand, deviceId);
       return;
     }
 
@@ -689,36 +695,39 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
 
       {/* Arena */}
       <div
-        className={`arena${arenaShake ? ' arena--shake' : ''}`}
+        className={`arena${arenaShake ? ' arena--shake' : ''}${(status === 'idle' || status === 'done') ? ' arena--screen' : ''}`}
         style={{ gridTemplateColumns: `repeat(${grid.cols}, minmax(0, 1fr))` }}
         onTouchMove={(e) => e.preventDefault()}
       >
-        {[...Array(cellCount)].map((_, idx) => (
-          <button
-            key={idx}
-            type="button"
-            className={[
-              'cell',
-              idx === activeCell     ? 'cell--active cell--life' : '',
-              idx === hazardCell     ? 'cell--hazard'            : '',
-              idx === logoTile?.cell ? 'cell--logo'              : '',
-              flashMap[idx]          ? `cell--flash-${flashMap[idx]}` : '',
-            ].join(' ').trim()}
-            style={idx === activeCell ? { '--life': `${difficultyWindow}ms` } : undefined}
-            onPointerDown={(e) => { e.preventDefault(); registerHit(idx); }}
-            aria-label={idx === activeCell ? 'Active target' : idx === hazardCell ? 'Hazard' : idx === logoTile?.cell ? 'Bonus' : 'Tile'}
-          >
-            {idx === logoTile?.cell && (
-              <img
-                src={logoTile.src}
-                alt={logoTile.brand}
-                className="cell-logo-img"
-                style={logoTile.src === '/logo_two.png' ? { transform: 'scale(1.25)' } : { transform: 'scale(1.15)' }}
-                draggable={false}
-              />
-            )}
-          </button>
-        ))}
+        {/* Grid cells — only rendered during active play */}
+        {status !== 'idle' && status !== 'done' && (
+          [...Array(cellCount)].map((_, idx) => (
+            <button
+              key={idx}
+              type="button"
+              className={[
+                'cell',
+                idx === activeCell     ? 'cell--active cell--life' : '',
+                idx === hazardCell     ? 'cell--hazard'            : '',
+                idx === logoTile?.cell ? 'cell--logo'              : '',
+                flashMap[idx]          ? `cell--flash-${flashMap[idx]}` : '',
+              ].join(' ').trim()}
+              style={idx === activeCell ? { '--life': `${difficultyWindow}ms` } : undefined}
+              onPointerDown={(e) => { e.preventDefault(); registerHit(idx); }}
+              aria-label={idx === activeCell ? 'Active target' : idx === hazardCell ? 'Hazard' : idx === logoTile?.cell ? 'Bonus' : 'Tile'}
+            >
+              {idx === logoTile?.cell && (
+                <img
+                  src={logoTile.src}
+                  alt={logoTile.brand}
+                  className="cell-logo-img"
+                  style={logoTile.src === '/logo_two.png' ? { transform: 'scale(1.25)' } : { transform: 'scale(1.15)' }}
+                  draggable={false}
+                />
+              )}
+            </button>
+          ))
+        )}
 
         {/* Floating score popups */}
         {pops.map((pop) => (
@@ -740,19 +749,15 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
         {snapBanner    && <div className="arena-banner arena-banner--snap">⚡ FASTEST SNAP!</div>}
         {challengeBanner && <div className="arena-banner arena-banner--challenge">🎯 DAILY CHALLENGE COMPLETE!</div>}
 
-        {/* Overlays */}
-        {(status === 'countdown' || status === 'paused' || status === 'idle' || status === 'done') && (
+        {/* ── Paused / Countdown — absolute overlay covers live grid ── */}
+        {(status === 'countdown' || status === 'paused') && (
           <div className="overlay">
             <div className="overlay-card">
-
-              {/* ── Countdown ── */}
               {status === 'countdown' && (
                 <p className={`countdown-num${countdown === 'GO!' ? ' countdown-num--go' : ''}`}>
                   {countdown}
                 </p>
               )}
-
-              {/* ── Paused ── */}
               {status === 'paused' && (
                 <>
                   <p className="headline">Paused</p>
@@ -761,80 +766,96 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
                   <button className="mini-btn ghost" onClick={reset}>Restart</button>
                 </>
               )}
+            </div>
+          </div>
+        )}
 
-              {/* ── Idle / Done ── */}
-              {(status === 'idle' || status === 'done') && (
+        {/* ── Idle / Done — no cells, content flows, arena height is dynamic ── */}
+        {(status === 'idle' || status === 'done') && (
+          <div className="overlay-screen">
+            <div className="overlay-card">
+              <p className="headline">{status === 'idle' ? 'Arcade Arena' : 'Run Complete'}</p>
+
+              {status === 'done' ? (
                 <>
-                  <p className="headline">{status === 'idle' ? 'Arcade Arena' : 'Run Complete'}</p>
-
-                  {status === 'done' ? (
-                    <>
-                      {(isNewBest || isFirstBest) && (
-                        <p className="new-best-badge">
-                          {isFirstBest ? 'FIRST SCORE SET' : 'NEW PERSONAL BEST'}
-                        </p>
-                      )}
-                      <div className="end-stats">
-                        <div className="end-stat">
-                          <span className="end-stat-label">Score</span>
-                          <span className="end-stat-value accent">{score}</span>
-                        </div>
-                        {accuracy !== null && (
-                          <div className="end-stat">
-                            <span className="end-stat-label">Accuracy</span>
-                            <span className="end-stat-value">{accuracy}%</span>
-                          </div>
-                        )}
-                        {fastestHit !== null && (
-                          <div className="end-stat">
-                            <span className="end-stat-label">Best snap</span>
-                            <span className="end-stat-value">{fastestHit} ms</span>
-                          </div>
-                        )}
-                        {avgReaction !== null && (
-                          <div className="end-stat">
-                            <span className="end-stat-label">Avg reaction</span>
-                            <span className="end-stat-value">{avgReaction} ms</span>
-                          </div>
-                        )}
-                        {prevRunScoreRef.current !== null && (
-                          <div className="end-stat">
-                            <span className="end-stat-label">vs last run</span>
-                            <span className={`end-stat-value ${score >= prevRunScoreRef.current ? 'accent' : 'end-stat-value--down'}`}>
-                              {score >= prevRunScoreRef.current ? `+${score - prevRunScoreRef.current}` : `-${prevRunScoreRef.current - score}`}
-                            </span>
-                          </div>
-                        )}
-                        {lastRank && (
-                          <div className="end-stat">
-                            <span className="end-stat-label">Global rank</span>
-                            <span className="end-stat-value accent">#{lastRank}</span>
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <p className="sub">
-                        Tap tiles fast — each hit plays a note.
-                        {settings.hazardChance > 0 ? ' Dodge red decoys.' : ''}
-                        {' '}Gold tiles = bonus points.
-                      </p>
-                      <div className="daily-challenge-pill">
-                        {challengeComplete
-                          ? <span className="daily-challenge-pill--done">✓ Daily challenge complete</span>
-                          : <span>Today's goal: reach <strong>{challengeTarget} pts</strong></span>
-                        }
-                      </div>
-                    </>
+                  {(isNewBest || isFirstBest) && (
+                    <p className="new-best-badge">
+                      {isFirstBest ? 'FIRST SCORE SET' : 'NEW PERSONAL BEST'}
+                    </p>
                   )}
-
-                  <button className="cta" onClick={reset}>
-                    {status === 'idle' ? 'Start' : 'Play Again  (Space)'}
-                  </button>
+                  <div className="end-stats">
+                    <div className="end-stat">
+                      <span className="end-stat-label">Score</span>
+                      <span className="end-stat-value accent">{score}</span>
+                    </div>
+                    {accuracy !== null && (
+                      <div className="end-stat">
+                        <span className="end-stat-label">Accuracy</span>
+                        <span className="end-stat-value">{accuracy}%</span>
+                      </div>
+                    )}
+                    {fastestHit !== null && (
+                      <div className="end-stat">
+                        <span className="end-stat-label">Best snap</span>
+                        <span className="end-stat-value">{fastestHit} ms</span>
+                      </div>
+                    )}
+                    {avgReaction !== null && (
+                      <div className="end-stat">
+                        <span className="end-stat-label">Avg reaction</span>
+                        <span className="end-stat-value">{avgReaction} ms</span>
+                      </div>
+                    )}
+                    {prevRunScoreRef.current !== null && (
+                      <div className="end-stat">
+                        <span className="end-stat-label">vs last run</span>
+                        <span className={`end-stat-value ${score >= prevRunScoreRef.current ? 'accent' : 'end-stat-value--down'}`}>
+                          {score >= prevRunScoreRef.current ? `+${score - prevRunScoreRef.current}` : `-${prevRunScoreRef.current - score}`}
+                        </span>
+                      </div>
+                    )}
+                    {lastRank && (
+                      <div className="end-stat">
+                        <span className="end-stat-label">Global rank</span>
+                        <span className="end-stat-value accent">#{lastRank}</span>
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="sub">
+                    Tap tiles fast — each hit plays a note.
+                    {settings.hazardChance > 0 ? ' Dodge red decoys.' : ''}
+                    {' '}Gold tiles = bonus points.
+                  </p>
+                  <div className="daily-challenge-pill">
+                    {challengeComplete
+                      ? <span className="daily-challenge-pill--done">✓ Daily challenge complete</span>
+                      : <span>Today's goal: reach <strong>{challengeTarget} pts</strong></span>
+                    }
+                  </div>
                 </>
               )}
 
+              <button className="cta" onClick={reset}>
+                {status === 'idle' ? 'Start' : 'Play Again  (Space)'}
+              </button>
+
+              <div className="sponsor-credits">
+                <p className="sponsor-credits__label">Brought to you by</p>
+                <div className="sponsor-credits__logos">
+                  <div className="sponsor-brand">
+                    <img src="/logo_one.png" alt="Tuberway" className="sponsor-logo" draggable={false} />
+                    <span className="sponsor-brand-name">Tuberway</span>
+                  </div>
+                  <div className="sponsor-divider" />
+                  <div className="sponsor-brand">
+                    <img src="/logo_two.png" alt="1Percent" className="sponsor-logo" draggable={false} />
+                    <span className="sponsor-brand-name">1Percent</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}

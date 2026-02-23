@@ -1,7 +1,21 @@
-import React from 'react';
+import React, { useMemo } from 'react';
+
+// Returns a human-readable "X days Y hours" until next Sunday midnight UTC
+function nextSundayCountdown() {
+  const now     = new Date();
+  const day     = now.getUTCDay(); // 0=Sun
+  const daysLeft = day === 0 ? 7 : 7 - day;
+  const next    = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + daysLeft));
+  const diff    = next - now;
+  const d       = Math.floor(diff / 86_400_000);
+  const h       = Math.floor((diff % 86_400_000) / 3_600_000);
+  if (d === 0) return `${h}h`;
+  return `${d}d ${h}h`;
+}
 
 function Leaderboard({ scores, loading, error, period = 'all', onPeriodChange, currentPlayerName = '' }) {
-  const topFive = scores.slice(0, 5);
+  const topFive  = scores.slice(0, 5);
+  const resetIn  = useMemo(nextSundayCountdown, []);
 
   return (
     <div className="card leaderboard">
@@ -22,6 +36,9 @@ function Leaderboard({ scores, loading, error, period = 'all', onPeriodChange, c
           </button>
         </div>
       </div>
+      {period === 'week' && (
+        <p className="lb-reset-label">Resets in {resetIn}</p>
+      )}
 
       {loading && <p className="muted">Loading…</p>}
       {error   && <p className="error">{error}</p>}

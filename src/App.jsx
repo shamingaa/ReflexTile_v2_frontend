@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import GameBoard from './components/GameBoard';
 import StatsPage from './components/StatsPage';
 import Leaderboard from './Leaderboard';
-import { fetchScores, submitScore } from './api';
+import { fetchScores, submitScore, readBrandTaps } from './api';
+import { checkAndUnlock, ACHIEVEMENTS, readAchievements } from './achievements';
 import './styles.css';
 
 const DEVICE_KEY  = 'arcade_arena_device';
@@ -115,7 +116,38 @@ function App() {
   const [drawerOpen, setDrawerOpen]   = useState(false);
   const [copyStatus, setCopyStatus]   = useState('');
   const [shareStatus, setShareStatus] = useState('');
+  const [challengeStatus, setChallengeStatus] = useState('');
   const [noNameWarning, setNoNameWarning] = useState(false);
+  const [referralBonus, setReferralBonus] = useState(false);
+  const [achievementToasts, setAchievementToasts] = useState([]);
+  const [brandTaps, setBrandTaps] = useState(readBrandTaps);
+  const referralRef = useRef(null);
+
+  // ── Sponsor splash (show once on first ever visit) ─────────────────────
+  const [splashDone, setSplashDone] = useState(
+    () => localStorage.getItem('arcade_arena_splash_v1') === '1'
+  );
+  const dismissSplash = () => {
+    localStorage.setItem('arcade_arena_splash_v1', '1');
+    setSplashDone(true);
+  };
+  useEffect(() => {
+    if (splashDone) return;
+    const t = setTimeout(dismissSplash, 3000);
+    return () => clearTimeout(t);
+  }, [splashDone]); // eslint-disable-line
+
+  // ── Referral detection ─────────────────────────────────────────────────
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const ref    = params.get('ref');
+    if (ref && ref !== deviceId) {
+      referralRef.current = ref;
+      // Clean URL without reload
+      const clean = window.location.pathname;
+      window.history.replaceState({}, '', clean);
+    }
+  }, []); // eslint-disable-line
 
   const [personalBest, setPersonalBest] = useState(readPersonalBest);
   const [dailyBest,    setDailyBest]    = useState(readDailyBest);
@@ -153,19 +185,34 @@ function App() {
   };
 
   const handleFinish = async ({
-    score,
-    hits        = 0,
-    misses      = 0,
-    accuracy    = null,
-    fastestHit  = null,
-    avgReaction = null,
-    maxStreak   = 0,
+    score:        rawScore,
+    hits          = 0,
+    misses        = 0,
+    accuracy      = null,
+    fastestHit    = null,
+    avgReaction   = null,
+    maxStreak     = 0,
+    logoTaps      = 0,
   }) => {
     // FIX: was a silent drop — now warns the user
     if (!playerName.trim() || !nameLocked) {
       setNoNameWarning(true);
       setTimeout(() => setNoNameWarning(false), 4000);
       return;
+    }
+
+    // Apply referral bonus on first-ever run
+    let bonusApplied = false;
+    let score = rawScore;
+    if (referralRef.current) {
+      try {
+        const prevRuns = JSON.parse(localStorage.getItem('arcade_arena_runs') || '[]');
+        if (prevRuns.length === 0) {
+          score += 50;
+          bonusApplied = true;
+        }
+      } catch { /* noop */ }
+      referralRef.current = null; // use only once
     }
 
     const today = todayStr();
@@ -192,6 +239,21 @@ function App() {
     setPersonalBest(newPB);
     setDailyBest(newDaily);
     setLoginStreak(newStreak);
+
+    if (bonusApplied) {
+      setReferralBonus(true);
+      setTimeout(() => setReferralBonus(false), 4000);
+    }
+
+    // Refresh brand tap counts in UI
+    setBrandTaps(readBrandTaps());
+
+    // Check achievements
+    const newAchs = checkAndUnlock({ score, maxStreak, accuracy, fastestHit, logoTaps, loginStreak: newStreak });
+    if (newAchs.length > 0) {
+      setAchievementToasts(newAchs);
+      setTimeout(() => setAchievementToasts([]), 4500);
+    }
 
     try {
       await submitScore({ playerName, score, mode, deviceId });
@@ -224,7 +286,7 @@ function App() {
   const handleShare = async () => {
     if (!lastRun) return;
     const rankText = lastRun.rank ? ` (rank #${lastRun.rank})` : '';
-    const text = `I scored ${lastRun.score} on Arcade Arena ${difficulty}${rankText} — can you beat it?`;
+    const text = `I scored ${lastRun.score} on Arcade Arena ${difficulty}${rankText} ft. Tuberway & 1Percent — can you beat it?`;
     try {
       if (navigator.share) {
         await navigator.share({ title: 'Arcade Arena', text });
@@ -236,8 +298,56 @@ function App() {
     } catch { /* user cancelled */ }
   };
 
+  const handleChallengeShare = async () => {
+    const url  = `${window.location.origin}${window.location.pathname}?ref=${deviceId}`;
+    const text = `Challenge accepted? Play Arcade Arena and beat my score ft. Tuberway & 1Percent: ${url}`;
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'Arcade Arena Challenge', text, url });
+      } else {
+        await navigator.clipboard?.writeText(url);
+        setChallengeStatus('Link copied!');
+        setTimeout(() => setChallengeStatus(''), 2000);
+      }
+    } catch { /* user cancelled */ }
+  };
+
   return (
     <div className="app-shell">
+
+      {/* ── Sponsor splash (first visit only) ── */}
+      {!splashDone && (
+        <div className="sponsor-splash" onClick={dismissSplash}>
+          <div className="sponsor-splash__content">
+            <p className="sponsor-splash__powered">Powered by</p>
+            <div className="sponsor-splash__logos">
+              <img src="/logo_one.png" alt="Tuberway" className="sponsor-splash__img sponsor-splash__img--one" draggable={false} />
+              <img src="/logo_two.png" alt="1Percent"  className="sponsor-splash__img sponsor-splash__img--two" draggable={false} />
+            </div>
+            <p className="sponsor-splash__brands">Tuberway &amp; 1Percent</p>
+            <p className="sponsor-splash__tap">Tap to continue</p>
+          </div>
+        </div>
+      )}
+
+      {/* ── Achievement toasts ── */}
+      {achievementToasts.length > 0 && (
+        <div className="achievement-stack">
+          {achievementToasts.map((ach) => (
+            <div key={ach.id} className="achievement-toast">
+              <span className="achievement-toast__icon">{ach.icon}</span>
+              <div>
+                <p className="achievement-toast__title">Achievement Unlocked — {ach.title}</p>
+                <p className="achievement-toast__desc">{ach.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {referralBonus && (
+        <div className="streak-banner referral-banner">+50 Referral bonus applied!</div>
+      )}
       <header className="topbar">
         <div>
           <p className="eyebrow">Reflex Race</p>
@@ -304,6 +414,7 @@ function App() {
             onFinish={handleFinish}
             personalBest={personalBest}
             lastRank={lastRun?.rank ?? null}
+            deviceId={deviceId}
           />
         )}
       </main>
@@ -411,6 +522,33 @@ function App() {
                     </button>
                   </div>
                 )}
+
+                {/* ── Referral / Challenge a friend ── */}
+                <div className="referral-section">
+                  <p className="referral-section__label">Challenge a friend</p>
+                  <p className="referral-section__sub">Share your personal link — they get a +50 bonus on their first run.</p>
+                  <button className="referral-btn" onClick={handleChallengeShare}>
+                    Copy invite link
+                    {challengeStatus && <span className="share-toast">{challengeStatus}</span>}
+                  </button>
+                </div>
+
+                {/* ── Brand tap analytics — always visible ── */}
+                <div className="brand-analytics">
+                  <p className="brand-analytics__label">Sponsor tile taps</p>
+                  <div className="brand-analytics__row">
+                    <div className="brand-analytics__item">
+                      <img src="/logo_one.png" alt="Tuberway" className="brand-analytics__logo" />
+                      <span className="brand-analytics__name">Tuberway</span>
+                      <span className="brand-analytics__count">{brandTaps['Tuberway'] || 0}</span>
+                    </div>
+                    <div className="brand-analytics__item">
+                      <img src="/logo_two.png" alt="1Percent" className="brand-analytics__logo" />
+                      <span className="brand-analytics__name">1Percent</span>
+                      <span className="brand-analytics__count">{brandTaps['1Percent'] || 0}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
 
               <Leaderboard

@@ -1,0 +1,25 @@
+{
+  "name": "Arcade Arena",
+  "short_name": "Arcade Arena",
+  "description": "Reflex tapping game ft. Tuberway & 1Percent",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#080b11",
+  "theme_color": "#7cf3c5",
+  "icons": [
+    {
+      "src": "/logo_one.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo_one.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["games", "entertainment"]
+}

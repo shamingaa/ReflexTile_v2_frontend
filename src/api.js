@@ -19,3 +19,26 @@ export async function submitScore({ playerName, score, mode, deviceId }) {
   if (!res.ok) throw new Error('Failed to store score');
   return res.json();
 }
+
+const BRAND_TAPS_KEY = 'arcade_arena_brand_taps';
+
+export function trackLogoTap(brand, deviceId) {
+  // Store locally for UI display
+  try {
+    const taps = JSON.parse(localStorage.getItem(BRAND_TAPS_KEY) || '{}');
+    taps[brand] = (taps[brand] || 0) + 1;
+    localStorage.setItem(BRAND_TAPS_KEY, JSON.stringify(taps));
+  } catch { /* noop */ }
+
+  // Fire-and-forget to server
+  fetch(`${base}/api/analytics/logo`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ brand, deviceId, event: 'tap' }),
+  }).catch(() => { /* no network — that's ok */ });
+}
+
+export function readBrandTaps() {
+  try { return JSON.parse(localStorage.getItem(BRAND_TAPS_KEY) || '{}'); }
+  catch { return {}; }
+}

@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from 'react';
+import { ACHIEVEMENTS, readAchievements } from '../achievements';
 
 const HISTORY_KEY = 'arcade_arena_history';
 const RUNS_KEY    = 'arcade_arena_runs';
@@ -195,8 +196,9 @@ function LineChart({ days }) {
 // ─── StatsPage ───────────────────────────────────────────────────────────────
 
 function StatsPage() {
-  const history     = useMemo(readHistory, []);
-  const runs        = useMemo(readRuns,    []);
+  const history     = useMemo(readHistory,     []);
+  const runs        = useMemo(readRuns,        []);
+  const unlockedAchs = useMemo(readAchievements, []);
   const allTimeBest = parseInt(localStorage.getItem(PB_KEY) || '0', 10);
 
   const [chartDays, setChartDays] = useState(14);
@@ -379,6 +381,24 @@ function StatsPage() {
             </table>
           </div>
         )}
+      </div>
+      {/* ── Achievements ── */}
+      <div className="stats-runs-card">
+        <p className="stats-section-label">Achievements ({Object.keys(unlockedAchs).length}/{ACHIEVEMENTS.length})</p>
+        <div className="achievements-grid">
+          {ACHIEVEMENTS.map((ach) => {
+            const unlocked = !!unlockedAchs[ach.id];
+            return (
+              <div key={ach.id} className={`ach-card${unlocked ? ' ach-card--unlocked' : ''}`}>
+                <span className="ach-icon">{unlocked ? ach.icon : '🔒'}</span>
+                <div className="ach-body">
+                  <p className="ach-title">{ach.title}</p>
+                  <p className="ach-desc">{ach.desc}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
