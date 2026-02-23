@@ -3,7 +3,7 @@ import GameBoard from './components/GameBoard';
 import StatsPage from './components/StatsPage';
 import Leaderboard from './Leaderboard';
 import { fetchScores, submitScore, readBrandTaps } from './api';
-import { checkAndUnlock, ACHIEVEMENTS, readAchievements } from './achievements';
+import { checkAndUnlock } from './achievements';
 import './styles.css';
 
 const DEVICE_KEY  = 'arcade_arena_device';
@@ -119,7 +119,6 @@ function App() {
   const [challengeStatus, setChallengeStatus] = useState('');
   const [noNameWarning, setNoNameWarning] = useState(false);
   const [referralBonus, setReferralBonus] = useState(false);
-  const [achievementToasts, setAchievementToasts] = useState([]);
   const [brandTaps, setBrandTaps] = useState(readBrandTaps);
   const referralRef = useRef(null);
 
@@ -248,12 +247,8 @@ function App() {
     // Refresh brand tap counts in UI
     setBrandTaps(readBrandTaps());
 
-    // Check achievements
-    const newAchs = checkAndUnlock({ score, maxStreak, accuracy, fastestHit, logoTaps, loginStreak: newStreak });
-    if (newAchs.length > 0) {
-      setAchievementToasts(newAchs);
-      setTimeout(() => setAchievementToasts([]), 4500);
-    }
+    // Check achievements (silent — visible on Stats page)
+    checkAndUnlock({ score, maxStreak, accuracy, fastestHit, logoTaps, loginStreak: newStreak });
 
     try {
       await submitScore({ playerName, score, mode, deviceId });
@@ -330,20 +325,6 @@ function App() {
         </div>
       )}
 
-      {/* ── Achievement toasts ── */}
-      {achievementToasts.length > 0 && (
-        <div className="achievement-stack">
-          {achievementToasts.map((ach) => (
-            <div key={ach.id} className="achievement-toast">
-              <span className="achievement-toast__icon">{ach.icon}</span>
-              <div>
-                <p className="achievement-toast__title">Achievement Unlocked — {ach.title}</p>
-                <p className="achievement-toast__desc">{ach.desc}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
 
       {referralBonus && (
         <div className="streak-banner referral-banner">+50 Referral bonus applied!</div>
