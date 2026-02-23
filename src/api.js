@@ -3,7 +3,6 @@ const base = import.meta.env.VITE_API_BASE || 'https://reflextile-api-v2.atlasho
 export async function fetchScores(mode) {
   const query = new URLSearchParams();
   if (mode) query.set('mode', mode);
-  query.set('limit', '5');
   const res = await fetch(`${base}/api/scores?${query.toString()}`);
   if (!res.ok) throw new Error('Failed to load scores');
   return res.json();
