@@ -22,7 +22,7 @@ const LOGOS = [
 ];
 const LOGO_BONUS = 25;    // points for tapping the logo
 const LOGO_TTL   = 2200;  // ms before it auto-expires
-const LOGO_EVERY = [8, 12]; // spawn after [min, max] correct hits
+const LOGO_EVERY = [5, 7]; // spawn after [min, max] correct hits
 
 // ─── Tap melody — C minor pentatonic, mirrors the key of "Lonely at the Top" ─
 // Notes advance sequentially on every correct hit, looping through the phrase.
@@ -39,21 +39,21 @@ const TAP_MELODY = [
 const DIFFICULTY = {
   normal: {
     startTime: 30, missPenalty: 4, hazardChance: 0,
-    timeRewardCap: 50, paceBase: 1900, paceFloor: 900,
+    timeRewardCap: 50, paceBase: 1400, paceFloor: 700,
     paceScoreFactor: 4.5, paceStreakFactor: 9,
     rewardBonus: 0.8, rewardFloor: 0.55, rewardSlope: 940, rewardStreakFactor: 0.012,
     minGain: 1.1, wrongClickPenalty: 1.4,
   },
   hard: {
     startTime: 25, missPenalty: 4.5, hazardChance: 0.08,
-    timeRewardCap: 40, paceBase: 1500, paceFloor: 700,
+    timeRewardCap: 40, paceBase: 1100, paceFloor: 550,
     paceScoreFactor: 6.5, paceStreakFactor: 12,
     rewardBonus: 0.65, rewardFloor: 0.38, rewardSlope: 900, rewardStreakFactor: 0.018,
     minGain: 0.85, wrongClickPenalty: 1.6,
   },
   extreme: {
     startTime: 20, missPenalty: 5, hazardChance: 0.14,
-    timeRewardCap: 34, paceBase: 1250, paceFloor: 550,
+    timeRewardCap: 34, paceBase: 900, paceFloor: 430,
     paceScoreFactor: 8.5, paceStreakFactor: 15,
     rewardBonus: 0.55, rewardFloor: 0.32, rewardSlope: 860, rewardStreakFactor: 0.023,
     minGain: 0.75, wrongClickPenalty: 1.9,
@@ -109,7 +109,7 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
   const songRef          = useRef(null);   // HTMLAudioElement for background track
   const songGainRef      = useRef(null);   // GainNode — controls background volume
   const logoTimerRef     = useRef(null);   // auto-expire timer for logo tile
-  const nextLogoAtRef    = useRef(8 + Math.floor(Math.random() * 5)); // hit count for first logo
+  const nextLogoAtRef    = useRef(4 + Math.floor(Math.random() * 3)); // hit count for first logo (4–6)
   const logoIdxRef       = useRef(0);      // alternates between logo_one / logo_two
   // Stat refs — synchronous counterparts for state; read by endRun
   const hitsRef          = useRef(0);
@@ -337,7 +337,7 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
     totalReactionRef.current = 0;
     maxStreakRef.current = 0;
     songPosRef.current = 0;
-    nextLogoAtRef.current = 8 + Math.floor(Math.random() * 5);
+    nextLogoAtRef.current = 4 + Math.floor(Math.random() * 3);
     logoIdxRef.current = 0;
   };
 
@@ -451,11 +451,10 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
   // ── Game actions ──────────────────────────────────────────────────────────
 
   const registerMiss = () => {
-    if (status !== 'playing') return;
+    if (status !== 'playing' || finishedRef.current) return;
     setStreak(0);
     setMisses((m) => m + 1);
     missesRef.current += 1;
-    flashCell(activeCell, 'miss');
     playTone(220, 140, 0.13);
     const ended = applyTimePenalty(settings.missPenalty);
     if (!ended) spawnNewTarget();
@@ -466,7 +465,7 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
   };
 
   const registerHit = (cellIndex) => {
-    if (status !== 'playing') return;
+    if (status !== 'playing' || finishedRef.current) return;
 
     // ── Logo bonus tile ──
     if (cellIndex === logoTile?.cell) {
@@ -701,20 +700,12 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
         )}
       </div>
 
-      {/* Sound toggle — always accessible below the arena */}
-      <div className="sound-bar">
-        <button
-          className={`sound-toggle${soundOn ? '' : ' sound-toggle--off'}`}
-          onClick={() => setSoundOn((v) => !v)}
-          title="Toggle sound (M)"
-        >
-          <span className="sound-icon">♪</span>
-          {soundOn ? 'Sound on' : 'Sound off'}
-        </button>
-        {soundOn && (
+      {/* Now playing label */}
+      {soundOn && (
+        <div className="sound-bar">
           <span className="now-playing">Lonely at the Top – Asake</span>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
