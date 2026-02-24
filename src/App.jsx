@@ -467,7 +467,7 @@ function App() {
             <div className="drawer__content">
               <div className="card">
                 {/* Player name */}
-                <label className="field">
+                <div className="field">
                   <span>Player tag</span>
                   {nameLocked && !nameEditMode ? (
                     <div className="id-row">
@@ -496,12 +496,12 @@ function App() {
                       )}
                     </>
                   )}
-                </label>
+                </div>
 
                 {/* Contact */}
-                <label className="field">
+                <div className="field">
                   <span>Email or phone <span className="contact-optional">(for prizes)</span></span>
-                  {!contactEditMode && !nameEditMode ? (
+                  {!contactEditMode ? (
                     <div className="id-row">
                       <span className="name-display" style={{ fontSize: 13, color: contact ? 'var(--text)' : 'var(--muted)' }}>
                         {contact || 'Not set'}
@@ -518,16 +518,14 @@ function App() {
                         onKeyDown={(e) => e.key === 'Enter' && handleSaveContact()}
                         maxLength={128}
                         placeholder="Email or phone number"
-                        autoFocus={contactEditMode}
+                        autoFocus
                       />
                       {contactError && <p style={{ fontSize: 12, color: 'var(--danger)', margin: '2px 0' }}>{contactError}</p>}
                       <button className="mini-btn" type="button" onClick={handleSaveContact}>Save</button>
-                      {contactEditMode && (
-                        <button className="mini-btn ghost" type="button" onClick={() => { setContactEditMode(false); setPendingContact(contact); setContactError(''); }}>Cancel</button>
-                      )}
+                      <button className="mini-btn ghost" type="button" onClick={() => { setContactEditMode(false); setPendingContact(contact); setContactError(''); }}>Cancel</button>
                     </>
                   )}
-                </label>
+                </div>
 
                 {/* Device ID */}
                 <div className="field inline">
