@@ -16,7 +16,7 @@ function nextSundayCountdown() {
 
 const MEDALS = ['🥇', '🥈', '🥉'];
 
-function Leaderboard({ scores, loading, error, period = 'all', onPeriodChange, currentPlayerName = '' }) {
+function Leaderboard({ scores, loading, error, period = 'all', onPeriodChange, currentPlayerName = '', tapChampion = null }) {
   const resetIn = useMemo(nextSundayCountdown, []);
 
   const top3 = scores.slice(0, 3);
@@ -70,8 +70,8 @@ function Leaderboard({ scores, loading, error, period = 'all', onPeriodChange, c
         <p className="muted">No scores yet{period === 'week' ? ' this week' : ''}. Be first!</p>
       )}
 
-      {/* Top 3 podium */}
-      {top3.length > 0 && (
+      {/* Top 3 podium + Tap Champion */}
+      {(top3.length > 0 || tapChampion) && (
         <div className="lb-podium">
           {top3.map((entry, idx) => (
             <div
@@ -87,6 +87,27 @@ function Leaderboard({ scores, loading, error, period = 'all', onPeriodChange, c
               <span className="lb-podium__score">{entry.score.toLocaleString()}</span>
             </div>
           ))}
+
+          {tapChampion && (
+            <div
+              className={[
+                'lb-podium__card lb-podium__card--tap',
+                tapChampion.playerName === currentPlayerName ? 'lb-podium__card--me' : '',
+              ].join(' ').trim()}
+            >
+              <span className="lb-podium__medal">🎯</span>
+              <span className="lb-podium__name">
+                {tapChampion.playerName}
+                <span className="lb-podium__tap-label">Sponsor Tap Champion</span>
+              </span>
+              <span className="lb-podium__score">{Number(tapChampion.totalTaps).toLocaleString()} taps</span>
+              <span className="lb-podium__tap-breakdown">
+                <span className="tap-brand--tube">Tuberway&nbsp;{Number(tapChampion.tuberwayTaps).toLocaleString()}</span>
+                <span className="tap-brand-sep"> · </span>
+                <span className="tap-brand--pct">1Percent&nbsp;{Number(tapChampion.percentTaps).toLocaleString()}</span>
+              </span>
+            </div>
+          )}
         </div>
       )}
 

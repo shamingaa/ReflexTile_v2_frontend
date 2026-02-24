@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import GameBoard from './components/GameBoard';
 import StatsPage from './components/StatsPage';
 import Leaderboard from './Leaderboard';
-import { fetchScores, submitScore, registerPlayer, readBrandTaps } from './api';
+import { fetchScores, submitScore, registerPlayer, readBrandTaps, fetchTapLeaderboard } from './api';
 import { checkAndUnlock } from './achievements';
 import './styles.css';
 
@@ -113,10 +113,11 @@ function App() {
   const difficulty = 'competition';
   const [view, setView]             = useState('game'); // 'game' | 'stats'
 
-  const [scores,  setScores]  = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState('');
-  const [lbPeriod, setLbPeriod] = useState('all');
+  const [scores,    setScores]    = useState([]);
+  const [loading,   setLoading]   = useState(false);
+  const [error,     setError]     = useState('');
+  const [lbPeriod,  setLbPeriod]  = useState('all');
+  const [tapScores, setTapScores] = useState([]);
 
   const [nameGateError,   setNameGateError]   = useState('');
   const [nameGateLoading, setNameGateLoading] = useState(false);
@@ -175,7 +176,15 @@ function App() {
     }
   };
 
+  const loadTapScores = async () => {
+    try {
+      const list = await fetchTapLeaderboard();
+      setTapScores(list);
+    } catch { /* silent — non-critical */ }
+  };
+
   useEffect(() => { loadScores(mode, lbPeriod); }, [mode, lbPeriod]); // eslint-disable-line
+  useEffect(() => { loadTapScores(); }, []); // eslint-disable-line
 
   const handleSaveName = async () => {
     const cleaned = pendingName.trim();
@@ -299,6 +308,7 @@ function App() {
         isNewDaily: score >= newDaily,
         streak:     newStreak,
       });
+      loadTapScores();
     } catch (err) {
       console.error(err);
       setError(err.message || 'Could not save score');
@@ -605,6 +615,7 @@ function App() {
                 period={lbPeriod}
                 onPeriodChange={(p) => setLbPeriod(p)}
                 currentPlayerName={playerName}
+                tapChampion={tapScores[0] ?? null}
               />
             </div>
           </div>

@@ -514,6 +514,14 @@ h1 { margin: 0; font-size: 28px; letter-spacing: -0.4px; }
 .lb-podium__card--2 { background: rgba(200,200,200,0.05); border-color: rgba(200,200,200,0.2); }
 .lb-podium__card--3 { background: rgba(205,127,50,0.06); border-color: rgba(205,127,50,0.22); }
 .lb-podium__card--me { outline: 2px solid rgba(124,243,197,0.5); outline-offset: -1px; }
+.lb-podium__card--tap { background: rgba(180,130,255,0.08); border-color: rgba(180,130,255,0.35); margin-top: 4px; }
+.lb-podium__card--tap .lb-podium__score { color: #b482ff; }
+.lb-podium__tap-label { display: block; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: #b482ff; margin-top: 1px; }
+.lb-podium__card--tap .lb-podium__name { white-space: normal; overflow: visible; }
+.lb-podium__tap-breakdown { grid-column: 1 / -1; font-size: 11px; color: var(--muted); margin-top: -2px; }
+.tap-brand--tube { color: #5ad1ff; font-weight: 600; }
+.tap-brand--pct  { color: var(--accent); font-weight: 600; }
+.tap-brand-sep   { opacity: 0.4; }
 .lb-podium__medal { font-size: 20px; line-height: 1; }
 .lb-podium__name  { font-weight: 700; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lb-podium__score { font-weight: 800; font-size: 15px; font-variant-numeric: tabular-nums; white-space: nowrap; }

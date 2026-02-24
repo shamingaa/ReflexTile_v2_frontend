@@ -53,6 +53,12 @@ export function trackLogoTap(brand, deviceId) {
   }).catch(() => { /* no network — that's ok */ });
 }
 
+export async function fetchTapLeaderboard() {
+  const res = await fetch(`${base}/api/analytics/logo/leaderboard`);
+  if (!res.ok) throw new Error('Failed to load tap leaderboard');
+  return res.json();
+}
+
 export function readBrandTaps() {
   try { return JSON.parse(localStorage.getItem(BRAND_TAPS_KEY) || '{}'); }
   catch { return {}; }
