@@ -462,8 +462,6 @@ function App() {
                   </div>
                 </label>
 
-                <p className="muted small-hint">Space: start / restart &nbsp;·&nbsp; P/Esc: pause</p>
-
                 {/* Retention stats */}
                 <div className="stats-row">
                   <div className="stat-chip">

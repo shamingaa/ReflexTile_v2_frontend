@@ -669,6 +669,7 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
+    <>
     <div className="game-panel">
       {/* HUD */}
       <div className="hud hud--compact">
@@ -868,6 +869,20 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
         </div>
       )}
     </div>
+
+    {/* Pause / Resume button — outside the game box */}
+    {(status === 'playing' || status === 'paused') && (
+      <div className="board-pause-row">
+        <button
+          className="board-pause-btn"
+          onPointerDown={(e) => { e.preventDefault(); status === 'playing' ? setStatus('paused') : resumeGame(); }}
+          aria-label={status === 'playing' ? 'Pause' : 'Resume'}
+        >
+          {status === 'playing' ? '⏸ Pause' : '▶ Resume'}
+        </button>
+      </div>
+    )}
+    </>
   );
 }
 

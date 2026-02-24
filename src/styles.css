@@ -252,6 +252,28 @@ h1 { margin: 0; font-size: 28px; letter-spacing: -0.4px; }
 .value.small { font-size: 12px; color: var(--muted); margin-top: 2px; }
 .pb-line { font-size: 11px; color: var(--muted); margin: 0 0 4px; }
 
+.board-pause-row {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+}
+.board-pause-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 20px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 20px;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background 0.15s, color 0.15s;
+}
+.board-pause-btn:hover { background: rgba(255,255,255,0.08); color: var(--text); }
+
 .controls-row { display: none; }
 
 /* ── Time bar ──────────────────────────────────────────────────────────── */
