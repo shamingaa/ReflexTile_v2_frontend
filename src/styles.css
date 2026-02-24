@@ -863,6 +863,7 @@ h1 { margin: 0; font-size: 28px; letter-spacing: -0.4px; }
   text-transform: capitalize;
   white-space: nowrap;
 }
+.diff-badge--competition { background: rgba(90,209,255,0.10); border: 1px solid rgba(90,209,255,0.28); color: var(--accent2); }
 .diff-badge--normal  { background: rgba(124,243,197,0.10); border: 1px solid rgba(124,243,197,0.25); color: var(--accent); }
 .diff-badge--hard    { background: rgba(255,179,71,0.10);  border: 1px solid rgba(255,179,71,0.28);  color: var(--warn);   }
 .diff-badge--extreme { background: rgba(255,95,109,0.10);  border: 1px solid rgba(255,95,109,0.30);  color: var(--danger); }

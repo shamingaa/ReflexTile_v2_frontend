@@ -110,7 +110,7 @@ function App() {
 
   const [deviceId] = useState(ensureDeviceId);
   const [mode]     = useState('solo');
-  const [difficulty, setDifficulty] = useState('normal');
+  const difficulty = 'competition';
   const [view, setView]             = useState('game'); // 'game' | 'stats'
 
   const [scores,  setScores]  = useState([]);
@@ -529,17 +529,6 @@ function App() {
                   </div>
                 </div>
 
-                {/* Difficulty */}
-                <label className="field inline">
-                  <span>Difficulty</span>
-                  <div className="segmented">
-                    {['normal', 'hard', 'extreme'].map((d) => (
-                      <button key={d} className={difficulty === d ? 'active' : ''} onClick={() => setDifficulty(d)}>
-                        {d.charAt(0).toUpperCase() + d.slice(1)}
-                      </button>
-                    ))}
-                  </div>
-                </label>
 
                 {/* Retention stats */}
                 <div className="stats-row">

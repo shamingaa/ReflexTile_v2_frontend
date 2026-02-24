@@ -21,9 +21,10 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
-  // Only cache GET requests; skip API calls
+  // Only cache GET requests; skip API calls and local dev server
   if (e.request.method !== 'GET') return;
   if (e.request.url.includes('/api/')) return;
+  if (e.request.url.includes('localhost') || e.request.url.includes('127.0.0.1')) return;
 
   e.respondWith(
     caches.match(e.request).then((cached) => {

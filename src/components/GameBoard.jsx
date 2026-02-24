@@ -53,27 +53,31 @@ const TAP_MELODY = [
 
 // ─── Difficulty presets ─────────────────────────────────────────────────────
 const DIFFICULTY = {
-  normal: {
-    startTime: 30, missPenalty: 4, hazardChance: 0,
-    timeRewardCap: 50, paceBase: 1400, paceFloor: 700,
-    paceScoreFactor: 4.5, paceStreakFactor: 9,
-    rewardBonus: 0.8, rewardFloor: 0.55, rewardSlope: 940, rewardStreakFactor: 0.012,
-    minGain: 1.1, wrongClickPenalty: 1.4,
+  // Competition mode — the only mode used in the app.
+  // Tile speed and hazard chance scale up progressively with score.
+  competition: {
+    startTime: 28, missPenalty: 4, hazardChance: 0, // hazardChance overridden progressively
+    timeRewardCap: 45, paceBase: 1250, paceFloor: 580,
+    paceScoreFactor: 5.5, paceStreakFactor: 10,
+    rewardBonus: 0.72, rewardFloor: 0.46, rewardSlope: 920, rewardStreakFactor: 0.015,
+    minGain: 0.95, wrongClickPenalty: 1.5,
   },
-  hard: {
-    startTime: 25, missPenalty: 4.5, hazardChance: 0.08,
-    timeRewardCap: 40, paceBase: 1100, paceFloor: 550,
-    paceScoreFactor: 6.5, paceStreakFactor: 12,
-    rewardBonus: 0.65, rewardFloor: 0.38, rewardSlope: 900, rewardStreakFactor: 0.018,
-    minGain: 0.85, wrongClickPenalty: 1.6,
-  },
-  extreme: {
-    startTime: 20, missPenalty: 5, hazardChance: 0.14,
-    timeRewardCap: 34, paceBase: 900, paceFloor: 430,
-    paceScoreFactor: 8.5, paceStreakFactor: 15,
-    rewardBonus: 0.55, rewardFloor: 0.32, rewardSlope: 860, rewardStreakFactor: 0.023,
-    minGain: 0.75, wrongClickPenalty: 1.9,
-  },
+  // Legacy presets kept for backward-compat with stored run records
+  normal:  { startTime: 30, missPenalty: 4,   hazardChance: 0,    timeRewardCap: 50, paceBase: 1400, paceFloor: 700,  paceScoreFactor: 4.5, paceStreakFactor: 9,  rewardBonus: 0.8,  rewardFloor: 0.55, rewardSlope: 940, rewardStreakFactor: 0.012, minGain: 1.1,  wrongClickPenalty: 1.4 },
+  hard:    { startTime: 25, missPenalty: 4.5,  hazardChance: 0.08, timeRewardCap: 40, paceBase: 1100, paceFloor: 550,  paceScoreFactor: 6.5, paceStreakFactor: 12, rewardBonus: 0.65, rewardFloor: 0.38, rewardSlope: 900, rewardStreakFactor: 0.018, minGain: 0.85, wrongClickPenalty: 1.6 },
+  extreme: { startTime: 20, missPenalty: 5,    hazardChance: 0.14, timeRewardCap: 34, paceBase: 900,  paceFloor: 430,  paceScoreFactor: 8.5, paceStreakFactor: 15, rewardBonus: 0.55, rewardFloor: 0.32, rewardSlope: 860, rewardStreakFactor: 0.023, minGain: 0.75, wrongClickPenalty: 1.9 },
+};
+
+// Progressive hazard chance for competition mode
+// Score  0–149 : no hazards   (pure tap, accessible start)
+// Score 150–299: 4%  hazards  (first red tiles appear)
+// Score 300–499: 8%  hazards
+// Score 500+   : 13% hazards
+const getCompetitionHazard = (score) => {
+  if (score < 150) return 0;
+  if (score < 300) return 0.04;
+  if (score < 500) return 0.08;
+  return 0.13;
 };
 
 const pickCell = (previous, banned = [], count) => {
@@ -139,8 +143,9 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
   const logoIdxRef           = useRef(0);
   const pbBeatenRef          = useRef(false);      // PB beaten this run already?
   const challengeTriggeredRef = useRef(false);     // challenge completed this run?
-  const arenaShakeTimerRef   = useRef(null);
-  const arenaRef             = useRef(null);
+  const arenaShakeTimerRef      = useRef(null);
+  const arenaRef                = useRef(null);
+  const liveHazardChanceRef     = useRef(0);
   const prevTimeFloorRef     = useRef(null);       // last integer second for ticking
   const allTimeSnapRef       = useRef((() => {     // best reaction time ever (from runs)
     try {
@@ -256,6 +261,11 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
 
   useEffect(() => { scoreRef.current = score; }, [score]);
   useEffect(() => { statusRef.current = status; }, [status]);
+  useEffect(() => {
+    liveHazardChanceRef.current = difficulty === 'competition'
+      ? getCompetitionHazard(score)
+      : (settings.hazardChance ?? 0);
+  }, [score, difficulty, settings.hazardChance]);
 
   // 3-2-1-GO! countdown
   useEffect(() => {
@@ -392,7 +402,7 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
     setActiveCell((prev) => {
       const next = pickCell(prev, [], cellCount);
       spawnTimeRef.current = performance.now();
-      setHazardCell(Math.random() < settings.hazardChance ? pickCell(next, [next], cellCount) : null);
+      setHazardCell(Math.random() < liveHazardChanceRef.current ? pickCell(next, [next], cellCount) : null);
       // Evict logo tile if it would overlap with the new active cell
       setLogoTile((lt) => {
         if (lt && lt.cell === next) {
@@ -441,8 +451,7 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
     setPops([]); setComboMsg(''); setFlashMap({});
     const next = pickCell(-1, [], cellCount);
     setActiveCell(next);
-    setHazardCell(settings.hazardChance > 0 && Math.random() < settings.hazardChance
-      ? pickCell(next, [next], cellCount) : null);
+    setHazardCell(Math.random() < liveHazardChanceRef.current ? pickCell(next, [next], cellCount) : null);
   };
 
   // ── Effects ───────────────────────────────────────────────────────────────
@@ -844,7 +853,7 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
                 <>
                   <p className="sub">
                     Tap tiles fast — each hit plays a note.
-                    {settings.hazardChance > 0 ? ' Dodge red decoys.' : ''}
+                    {' Dodge red decoys as they appear.'}
                     {' '}Gold tiles = bonus points.
                   </p>
                   <div className="daily-challenge-pill">
