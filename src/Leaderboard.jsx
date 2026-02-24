@@ -17,20 +17,30 @@ function nextSundayCountdown() {
 const MEDALS = ['🥇', '🥈', '🥉'];
 
 function Leaderboard({ scores, loading, error, period = 'all', onPeriodChange, currentPlayerName = '' }) {
-  const [page, setPage] = useState(0);
   const resetIn = useMemo(nextSundayCountdown, []);
 
   const top3 = scores.slice(0, 3);
   const rest  = scores.slice(3);
 
   const totalPages = Math.ceil(rest.length / PAGE_SIZE);
-  const pageSlice  = rest.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
-  // Reset to page 0 when period or scores change
-  useEffect(() => { setPage(0); }, [period, scores.length]);
+  const myPageInRest = useMemo(() => {
+    const idx = rest.findIndex((s) => s.playerName === currentPlayerName);
+    return idx >= 0 ? Math.floor(idx / PAGE_SIZE) : 0;
+  }, [rest, currentPlayerName]);
+
+  const [page, setPage] = useState(myPageInRest);
+
+  useEffect(() => {
+    setPage(myPageInRest);
+  }, [myPageInRest, period]);
+
+  const pageSlice = rest.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
 
   return (
     <div className="card leaderboard">
+
+      {/* Header */}
       <div className="card-header">
         <h3>Leaderboard</h3>
         <div className="segmented">
@@ -60,13 +70,17 @@ function Leaderboard({ scores, loading, error, period = 'all', onPeriodChange, c
         <p className="muted">No scores yet{period === 'week' ? ' this week' : ''}. Be first!</p>
       )}
 
-      {/* ── Top 3 podium ── */}
+      {/* Top 3 podium */}
       {top3.length > 0 && (
         <div className="lb-podium">
           {top3.map((entry, idx) => (
             <div
               key={entry.id ?? entry.playerName}
-              className={`lb-podium__card lb-podium__card--${idx + 1}${entry.playerName === currentPlayerName ? ' lb-podium__card--me' : ''}`}
+              className={[
+                'lb-podium__card',
+                `lb-podium__card--${idx + 1}`,
+                entry.playerName === currentPlayerName ? 'lb-podium__card--me' : '',
+              ].join(' ').trim()}
             >
               <span className="lb-podium__medal">{MEDALS[idx]}</span>
               <span className="lb-podium__name">{entry.playerName}</span>
@@ -76,7 +90,7 @@ function Leaderboard({ scores, loading, error, period = 'all', onPeriodChange, c
         </div>
       )}
 
-      {/* ── Paginated rest ── */}
+      {/* Paginated rest (rank 4+) */}
       {rest.length > 0 && (
         <>
           <p className="lb-section-label">All players</p>
@@ -106,9 +120,7 @@ function Leaderboard({ scores, loading, error, period = 'all', onPeriodChange, c
               >
                 ← Prev
               </button>
-              <span className="lb-pagination__info">
-                {page + 1} / {totalPages}
-              </span>
+              <span className="lb-pagination__info">{page + 1} / {totalPages}</span>
               <button
                 className="lb-pagination__btn"
                 onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
@@ -120,6 +132,7 @@ function Leaderboard({ scores, loading, error, period = 'all', onPeriodChange, c
           )}
         </>
       )}
+
     </div>
   );
 }

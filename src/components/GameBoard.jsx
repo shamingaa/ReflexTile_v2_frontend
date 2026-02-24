@@ -140,6 +140,7 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
   const pbBeatenRef          = useRef(false);      // PB beaten this run already?
   const challengeTriggeredRef = useRef(false);     // challenge completed this run?
   const arenaShakeTimerRef   = useRef(null);
+  const arenaRef             = useRef(null);
   const prevTimeFloorRef     = useRef(null);       // last integer second for ticking
   const allTimeSnapRef       = useRef((() => {     // best reaction time ever (from runs)
     try {
@@ -446,19 +447,26 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
 
   // ── Effects ───────────────────────────────────────────────────────────────
 
-  // Timer countdown
+  // Timer countdown — only updates time, never calls endRun() inside a setState updater
   useEffect(() => {
     if (status !== 'playing') return undefined;
     const id = setInterval(() => {
       setTimeLeft((prev) => {
         const next = +(prev - 0.1).toFixed(2);
         timeLeftRef.current = next;
-        if (next <= 0) { clearInterval(id); endRun(); return 0; }
+        if (next <= 0) { clearInterval(id); return 0; }
         return next;
       });
     }, 100);
     return () => clearInterval(id);
   }, [status]); // eslint-disable-line
+
+  // End run when timer reaches 0 (separate effect — never called inside a setState updater)
+  useEffect(() => {
+    if (status === 'playing' && timeLeft <= 0) {
+      endRun();
+    }
+  }, [timeLeft]); // eslint-disable-line
 
   // Miss timeout — restarts whenever the active tile or pacing changes
   useEffect(() => {
@@ -499,6 +507,15 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [status, playerName]); // eslint-disable-line
+
+  // Prevent page scroll while touching the arena (must be non-passive)
+  useEffect(() => {
+    const el = arenaRef.current;
+    if (!el) return;
+    const prevent = (e) => e.preventDefault();
+    el.addEventListener('touchmove', prevent, { passive: false });
+    return () => el.removeEventListener('touchmove', prevent);
+  }, []);
 
   // Cleanup timers on unmount
   useEffect(() => () => {
@@ -696,9 +713,9 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
 
       {/* Arena */}
       <div
+        ref={arenaRef}
         className={`arena${arenaShake ? ' arena--shake' : ''}${(status === 'idle' || status === 'done') ? ' arena--screen' : ''}`}
         style={{ gridTemplateColumns: `repeat(${grid.cols}, minmax(0, 1fr))` }}
-        onTouchMove={(e) => e.preventDefault()}
       >
         {/* Grid cells — only rendered during active play */}
         {status !== 'idle' && status !== 'done' && (
