@@ -902,6 +902,8 @@ h1 { margin: 0; font-size: 28px; letter-spacing: -0.4px; }
 }
 
 .name-gate__input::placeholder { color: var(--muted); }
+.name-gate__input--contact { font-size: 14px; margin-top: -4px; }
+.contact-optional { font-size: 11px; color: var(--muted); font-weight: 400; }
 
 .name-gate__input:focus {
   border-color: var(--accent);

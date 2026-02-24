@@ -6,9 +6,10 @@ import { fetchScores, submitScore, readBrandTaps } from './api';
 import { checkAndUnlock } from './achievements';
 import './styles.css';
 
-const DEVICE_KEY  = 'arcade_arena_device';
-const NAME_KEY    = 'arcade_arena_player';
-const PB_KEY      = 'arcade_arena_pb';
+const DEVICE_KEY   = 'arcade_arena_device';
+const NAME_KEY     = 'arcade_arena_player';
+const CONTACT_KEY  = 'arcade_arena_contact';
+const PB_KEY       = 'arcade_arena_pb';
 const DAILY_KEY   = 'arcade_arena_daily';    // { date, score }
 const STREAK_KEY  = 'arcade_arena_streak';   // { lastDate, count }
 const HISTORY_KEY = 'arcade_arena_history';  // { [dateStr]: { score, games } }
@@ -103,6 +104,10 @@ function App() {
   const [nameLocked, setNameLocked]   = useState(() => !!(localStorage.getItem(NAME_KEY) || '').trim());
   const [nameEditMode, setNameEditMode] = useState(false);
 
+  const [contact, setContact]               = useState(() => localStorage.getItem(CONTACT_KEY) || '');
+  const [pendingContact, setPendingContact] = useState(() => localStorage.getItem(CONTACT_KEY) || '');
+  const [contactEditMode, setContactEditMode] = useState(false);
+
   const [deviceId] = useState(ensureDeviceId);
   const [mode]     = useState('solo');
   const [difficulty, setDifficulty] = useState('normal');
@@ -173,14 +178,25 @@ function App() {
     if (!cleaned) return;
     setPlayerName(cleaned);
     localStorage.setItem(NAME_KEY, cleaned);
+    const cleanedContact = pendingContact.trim();
+    setContact(cleanedContact);
+    localStorage.setItem(CONTACT_KEY, cleanedContact);
     setNameLocked(true);
     setNameEditMode(false);
   };
 
   const handleEditName = () => {
     setPendingName(playerName);
+    setPendingContact(contact);
     setNameEditMode(true);
     setNameLocked(false);
+  };
+
+  const handleSaveContact = () => {
+    const cleaned = pendingContact.trim();
+    setContact(cleaned);
+    localStorage.setItem(CONTACT_KEY, cleaned);
+    setContactEditMode(false);
   };
 
   const handleFinish = async ({
@@ -251,7 +267,7 @@ function App() {
     checkAndUnlock({ score, maxStreak, accuracy, fastestHit, logoTaps, loginStreak: newStreak });
 
     try {
-      await submitScore({ playerName, score, mode, deviceId });
+      await submitScore({ playerName, score, mode, deviceId, contact });
       const updated = await fetchScores(mode, lbPeriod);
       setScores(updated);
       const rank = updated.findIndex((s) => s.playerName === playerName) + 1;
@@ -378,6 +394,14 @@ function App() {
                 placeholder="Enter a player tag…"
                 autoFocus
               />
+              <input
+                className="name-gate__input name-gate__input--contact"
+                value={pendingContact}
+                onChange={(e) => setPendingContact(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSaveName()}
+                maxLength={128}
+                placeholder="Email or phone (for prizes)"
+              />
               <button
                 className="name-gate__btn"
                 onClick={handleSaveName}
@@ -434,7 +458,39 @@ function App() {
                           setNameEditMode(false);
                           setNameLocked(true);
                           setPendingName(playerName);
+                          setPendingContact(contact);
+                          setContactEditMode(false);
                         }}>Cancel</button>
+                      )}
+                    </>
+                  )}
+                </label>
+
+                {/* Contact */}
+                <label className="field">
+                  <span>Email or phone <span className="contact-optional">(for prizes)</span></span>
+                  {!contactEditMode && !nameEditMode ? (
+                    <div className="id-row">
+                      <span className="name-display" style={{ fontSize: 13, color: contact ? 'var(--text)' : 'var(--muted)' }}>
+                        {contact || 'Not set'}
+                      </span>
+                      <button className="mini-btn ghost" type="button" onClick={() => { setPendingContact(contact); setContactEditMode(true); }}>
+                        {contact ? 'Edit' : 'Set'}
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <input
+                        value={pendingContact}
+                        onChange={(e) => setPendingContact(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSaveContact()}
+                        maxLength={128}
+                        placeholder="Email or phone number"
+                        autoFocus={contactEditMode}
+                      />
+                      <button className="mini-btn" type="button" onClick={handleSaveContact}>Save</button>
+                      {contactEditMode && (
+                        <button className="mini-btn ghost" type="button" onClick={() => { setContactEditMode(false); setPendingContact(contact); }}>Cancel</button>
                       )}
                     </>
                   )}

@@ -1,4 +1,4 @@
-const base = import.meta.env.VITE_API_BASE || 'https://reflextile-api-v2.atlasholdin.com';
+const base = import.meta.env.VITE_API_BASE || '';
 
 export async function fetchScores(mode, period) {
   const query = new URLSearchParams();
@@ -9,11 +9,11 @@ export async function fetchScores(mode, period) {
   return res.json();
 }
 
-export async function submitScore({ playerName, score, mode, deviceId }) {
+export async function submitScore({ playerName, score, mode, deviceId, contact }) {
   const res = await fetch(`${base}/api/scores`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ playerName, score, mode, deviceId }),
+    body: JSON.stringify({ playerName, score, mode, deviceId, contact }),
   });
   if (res.status === 409) throw new Error('That name is taken — pick another one.');
   if (!res.ok) throw new Error('Failed to store score');
