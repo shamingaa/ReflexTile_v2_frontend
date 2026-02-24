@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import GameBoard from './components/GameBoard';
 import StatsPage from './components/StatsPage';
 import Leaderboard from './Leaderboard';
-import { fetchScores, submitScore, readBrandTaps } from './api';
+import { fetchScores, submitScore, registerPlayer, readBrandTaps } from './api';
 import { checkAndUnlock } from './achievements';
 import './styles.css';
 
@@ -118,6 +118,10 @@ function App() {
   const [error,   setError]   = useState('');
   const [lbPeriod, setLbPeriod] = useState('all');
 
+  const [nameGateError,   setNameGateError]   = useState('');
+  const [nameGateLoading, setNameGateLoading] = useState(false);
+  const [contactError,    setContactError]    = useState('');
+
   const [drawerOpen, setDrawerOpen]   = useState(false);
   const [copyStatus, setCopyStatus]   = useState('');
   const [shareStatus, setShareStatus] = useState('');
@@ -173,12 +177,22 @@ function App() {
 
   useEffect(() => { loadScores(mode, lbPeriod); }, [mode, lbPeriod]); // eslint-disable-line
 
-  const handleSaveName = () => {
+  const handleSaveName = async () => {
     const cleaned = pendingName.trim();
-    if (!cleaned) return;
+    const cleanedContact = pendingContact.trim();
+    if (!cleaned || !cleanedContact) return;
+    setNameGateError('');
+    setNameGateLoading(true);
+    try {
+      await registerPlayer({ playerName: cleaned, deviceId, contact: cleanedContact });
+    } catch (err) {
+      setNameGateError(err.message);
+      setNameGateLoading(false);
+      return;
+    }
+    setNameGateLoading(false);
     setPlayerName(cleaned);
     localStorage.setItem(NAME_KEY, cleaned);
-    const cleanedContact = pendingContact.trim();
     setContact(cleanedContact);
     localStorage.setItem(CONTACT_KEY, cleanedContact);
     setNameLocked(true);
@@ -192,8 +206,15 @@ function App() {
     setNameLocked(false);
   };
 
-  const handleSaveContact = () => {
+  const handleSaveContact = async () => {
     const cleaned = pendingContact.trim();
+    setContactError('');
+    try {
+      await registerPlayer({ playerName, deviceId, contact: cleaned });
+    } catch (err) {
+      setContactError(err.message);
+      return;
+    }
     setContact(cleaned);
     localStorage.setItem(CONTACT_KEY, cleaned);
     setContactEditMode(false);
@@ -400,14 +421,15 @@ function App() {
                 onChange={(e) => setPendingContact(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSaveName()}
                 maxLength={128}
-                placeholder="Email or phone (for prizes)"
+                placeholder="Email or phone (required for prizes)"
               />
+              {nameGateError && <p className="name-gate__error">{nameGateError}</p>}
               <button
                 className="name-gate__btn"
                 onClick={handleSaveName}
-                disabled={!pendingName.trim()}
+                disabled={!pendingName.trim() || !pendingContact.trim() || nameGateLoading}
               >
-                Let's play →
+                {nameGateLoading ? 'Checking…' : "Let's play →"}
               </button>
             </div>
           </div>
@@ -488,9 +510,10 @@ function App() {
                         placeholder="Email or phone number"
                         autoFocus={contactEditMode}
                       />
+                      {contactError && <p style={{ fontSize: 12, color: 'var(--danger)', margin: '2px 0' }}>{contactError}</p>}
                       <button className="mini-btn" type="button" onClick={handleSaveContact}>Save</button>
                       {contactEditMode && (
-                        <button className="mini-btn ghost" type="button" onClick={() => { setContactEditMode(false); setPendingContact(contact); }}>Cancel</button>
+                        <button className="mini-btn ghost" type="button" onClick={() => { setContactEditMode(false); setPendingContact(contact); setContactError(''); }}>Cancel</button>
                       )}
                     </>
                   )}

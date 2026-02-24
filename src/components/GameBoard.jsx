@@ -679,11 +679,11 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
         </div>
         <div className="hud-block">
           <p className="label">Score</p>
-          <p className="value score">{score}</p>
+          <p className="value score">{score.toLocaleString()}</p>
           <p className="value small" style={{ color: 'var(--accent)', marginTop: 2, visibility: streak >= 3 && status === 'playing' ? 'visible' : 'hidden' }}>x{streak}</p>
         </div>
         <div className="hud-block">
-          {personalBest > 0 && <p className="value small pb-line">PB {personalBest}</p>}
+          {personalBest > 0 && <p className="value small pb-line">PB {personalBest.toLocaleString()}</p>}
           <div className={`timebar${timeLeft <= 5 && timeLeft > 0 && status === 'playing' ? ' timebar--critical' : ''}`}>
             <div
               className={`timebar-fill${timebarBanked ? ' timebar-fill--banked' : ''}`}
@@ -787,7 +787,7 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
                   <div className="end-stats">
                     <div className="end-stat">
                       <span className="end-stat-label">Score</span>
-                      <span className="end-stat-value accent">{score}</span>
+                      <span className="end-stat-value accent">{score.toLocaleString()}</span>
                     </div>
                     {accuracy !== null && (
                       <div className="end-stat">

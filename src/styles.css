@@ -244,10 +244,10 @@ h1 { margin: 0; font-size: 28px; letter-spacing: -0.4px; }
 
 .hud { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .hud--compact { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.hud-block { background: rgba(255,255,255,0.02); padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.04); overflow: hidden; min-width: 0; }
+.hud-block { background: rgba(255,255,255,0.02); padding: 10px 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.04); min-width: 0; }
 .label { margin: 0; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .value { margin: 4px 0 0; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.value.score { font-size: 28px; }
+.value.score { font-size: clamp(14px, 4.5vw, 20px); font-variant-numeric: tabular-nums; letter-spacing: -0.5px; overflow: visible; text-overflow: unset; white-space: nowrap; }
 .value.badge { display: inline-block; background: rgba(124,243,197,0.12); border: 1px solid rgba(124,243,197,0.35); padding: 6px 10px; border-radius: 10px; }
 .value.small { font-size: 12px; color: var(--muted); margin-top: 2px; }
 .pb-line { font-size: 11px; color: var(--muted); margin: 0 0 4px; }
@@ -493,54 +493,81 @@ h1 { margin: 0; font-size: 28px; letter-spacing: -0.4px; }
 .card h3 { margin: 0; }
 .lb-section-label { color: var(--muted); font-size: 12px; margin: 8px 0 4px; }
 
-.card ol.list { list-style: none; padding-left: 0; margin: 0 0 8px 0; display: flex; flex-direction: column; gap: 6px; }
-
-.card ol.list.top5 li {
+/* ── Leaderboard podium (top 3) ── */
+.lb-podium {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.lb-podium__card {
   display: grid;
   grid-template-columns: auto 1fr auto;
-  gap: 8px;
   align-items: center;
-  padding: 6px 8px;
-  border-radius: 8px;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.07);
+  background: rgba(255,255,255,0.02);
 }
-.card ol.list.all li {
+.lb-podium__card--1 { background: rgba(255,215,0,0.08); border-color: rgba(255,215,0,0.35); }
+.lb-podium__card--2 { background: rgba(200,200,200,0.05); border-color: rgba(200,200,200,0.2); }
+.lb-podium__card--3 { background: rgba(205,127,50,0.06); border-color: rgba(205,127,50,0.22); }
+.lb-podium__card--me { outline: 2px solid rgba(124,243,197,0.5); outline-offset: -1px; }
+.lb-podium__medal { font-size: 20px; line-height: 1; }
+.lb-podium__name  { font-weight: 700; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lb-podium__score { font-weight: 800; font-size: 15px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.lb-podium__card--1 .lb-podium__score { color: #ffd700; }
+.lb-podium__card--2 .lb-podium__score { color: #c0c0c0; }
+.lb-podium__card--3 .lb-podium__score { color: #cd7f32; }
+
+/* ── Paginated players list ── */
+.card ol.list { list-style: none; padding-left: 0; margin: 0 0 8px 0; display: flex; flex-direction: column; gap: 4px; }
+.card ol.list.lb-list--paged li {
   display: grid;
   grid-template-columns: auto 1fr auto;
   gap: 6px;
-  align-items: baseline;
-  padding: 5px 8px;
+  align-items: center;
+  padding: 6px 8px;
   border-radius: 8px;
   font-size: 13px;
+  border: 1px solid transparent;
 }
-.card .time {
-  color: var(--muted);
-  font-size: 11px;
-  grid-column: 2 / -1;
-  padding-left: 0;
-}
-.card .name  { font-weight: 700; }
-.card .score { font-variant-numeric: tabular-nums; color: var(--accent); font-weight: 800; }
-.lb-rank-num { color: var(--muted); font-size: 11px; min-width: 26px; }
-
-.badge.rank {
-  display: inline-flex;
-  width: 28px;
-  height: 28px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  background: rgba(124,243,197,0.18);
-  border: 1px solid rgba(124,243,197,0.4);
-  font-weight: 800;
-  font-size: 13px;
-}
+.card .name  { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card .score { font-variant-numeric: tabular-nums; color: var(--accent); font-weight: 800; white-space: nowrap; }
+.lb-rank-num { color: var(--muted); font-size: 11px; min-width: 28px; }
 
 /* Highlight the current player's row */
 .lb-row--me {
   background: rgba(124,243,197,0.07);
-  border: 1px solid rgba(124,243,197,0.2);
+  border-color: rgba(124,243,197,0.2) !important;
 }
 .lb-row--me .name { color: var(--accent); }
+
+/* ── Pagination ── */
+.lb-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+.lb-pagination__btn {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+  color: var(--text);
+  padding: 5px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+.lb-pagination__btn:hover:not(:disabled) { opacity: 0.8; }
+.lb-pagination__btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.lb-pagination__info { font-size: 12px; color: var(--muted); min-width: 44px; text-align: center; }
 
 /* ── Utility ───────────────────────────────────────────────────────────── */
 .muted  { color: var(--muted); }
@@ -931,6 +958,11 @@ h1 { margin: 0; font-size: 28px; letter-spacing: -0.4px; }
   opacity: 0.35;
   cursor: not-allowed;
   box-shadow: none;
+}
+.name-gate__error {
+  font-size: 13px;
+  color: var(--danger);
+  text-align: center;
 }
 
 /* ── Sound toggle bar ──────────────────────────────────────────────────── */

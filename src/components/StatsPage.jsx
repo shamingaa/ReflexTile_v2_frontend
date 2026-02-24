@@ -109,7 +109,7 @@ function LineChart({ days }) {
             left: `calc(${((points[hovered].px - PAD_L) / PLOT_W) * 100}% + ${PAD_L}px)`,
           }}
         >
-          <span className="chart-tooltip__score">{points[hovered].score}</span>
+          <span className="chart-tooltip__score">{points[hovered].score.toLocaleString()}</span>
           <span className="chart-tooltip__date">{points[hovered].label}</span>
         </div>
       )}
@@ -138,7 +138,7 @@ function LineChart({ days }) {
               x={(PAD_L - 6).toFixed(1)} y={py.toFixed(1)}
               textAnchor="end" dominantBaseline="middle"
               className="chart-axis-label"
-            >{val}</text>
+            >{val.toLocaleString()}</text>
           </g>
         ))}
 
@@ -275,11 +275,11 @@ function StatsPage() {
       <div className="stats-row stats-row--wrap">
         <div className="stat-chip">
           <span className="stat-chip__label">All-time best</span>
-          <span className="stat-chip__value">{allTimeBest || '—'}</span>
+          <span className="stat-chip__value">{allTimeBest ? allTimeBest.toLocaleString() : '—'}</span>
         </div>
         <div className="stat-chip">
           <span className="stat-chip__label">Avg (7 days)</span>
-          <span className="stat-chip__value">{avg7 ?? '—'}</span>
+          <span className="stat-chip__value">{avg7 != null ? avg7.toLocaleString() : '—'}</span>
         </div>
         <div className="stat-chip">
           <span className="stat-chip__label">Total games</span>
@@ -371,7 +371,7 @@ function StatsPage() {
                         {run.difficulty}
                       </span>
                     </td>
-                    <td className="stats-table__score">{run.score}</td>
+                    <td className="stats-table__score">{run.score.toLocaleString()}</td>
                     <td>{run.accuracy != null ? `${run.accuracy}%` : '—'}</td>
                     <td>{run.fastestHit != null ? `${run.fastestHit} ms` : '—'}</td>
                     <td>{run.maxStreak ?? '—'}</td>

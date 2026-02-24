@@ -9,6 +9,21 @@ export async function fetchScores(mode, period) {
   return res.json();
 }
 
+export async function registerPlayer({ playerName, deviceId, contact }) {
+  const res = await fetch(`${base}/api/scores/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ playerName, deviceId, contact }),
+  });
+  if (res.status === 409) {
+    const data = await res.json().catch(() => ({}));
+    if (data.error === 'contact_taken') throw new Error('That email/phone is already registered.');
+    throw new Error('That player tag is already taken.');
+  }
+  if (!res.ok) throw new Error('Failed to register');
+  return res.json();
+}
+
 export async function submitScore({ playerName, score, mode, deviceId, contact }) {
   const res = await fetch(`${base}/api/scores`, {
     method: 'POST',

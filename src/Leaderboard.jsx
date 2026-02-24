@@ -1,21 +1,33 @@
-import React, { useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 
-// Returns a human-readable "X days Y hours" until next Sunday midnight UTC
+const PAGE_SIZE = 10;
+
 function nextSundayCountdown() {
-  const now     = new Date();
-  const day     = now.getUTCDay(); // 0=Sun
+  const now      = new Date();
+  const day      = now.getUTCDay();
   const daysLeft = day === 0 ? 7 : 7 - day;
-  const next    = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + daysLeft));
-  const diff    = next - now;
-  const d       = Math.floor(diff / 86_400_000);
-  const h       = Math.floor((diff % 86_400_000) / 3_600_000);
+  const next     = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + daysLeft));
+  const diff     = next - now;
+  const d        = Math.floor(diff / 86_400_000);
+  const h        = Math.floor((diff % 86_400_000) / 3_600_000);
   if (d === 0) return `${h}h`;
   return `${d}d ${h}h`;
 }
 
+const MEDALS = ['🥇', '🥈', '🥉'];
+
 function Leaderboard({ scores, loading, error, period = 'all', onPeriodChange, currentPlayerName = '' }) {
-  const topFive  = scores.slice(0, 5);
-  const resetIn  = useMemo(nextSundayCountdown, []);
+  const [page, setPage] = useState(0);
+  const resetIn = useMemo(nextSundayCountdown, []);
+
+  const top3 = scores.slice(0, 3);
+  const rest  = scores.slice(3);
+
+  const totalPages = Math.ceil(rest.length / PAGE_SIZE);
+  const pageSlice  = rest.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+  // Reset to page 0 when period or scores change
+  useEffect(() => { setPage(0); }, [period, scores.length]);
 
   return (
     <div className="card leaderboard">
@@ -36,52 +48,76 @@ function Leaderboard({ scores, loading, error, period = 'all', onPeriodChange, c
           </button>
         </div>
       </div>
+
       {period === 'week' && (
         <p className="lb-reset-label">Resets in {resetIn}</p>
       )}
 
       {loading && <p className="muted">Loading…</p>}
       {error   && <p className="error">{error}</p>}
+
       {!loading && scores.length === 0 && (
         <p className="muted">No scores yet{period === 'week' ? ' this week' : ''}. Be first!</p>
       )}
 
-      {topFive.length > 0 && (
-        <>
-          <p className="muted lb-section-label">Top 5</p>
-          <ol className="list top5">
-            {topFive.map((entry, idx) => (
-              <li
-                key={`top-${entry.id ?? entry.playerName}-${idx}`}
-                className={entry.playerName === currentPlayerName ? 'lb-row--me' : ''}
-              >
-                <span className="badge rank">{idx + 1}</span>
-                <span className="name">{entry.playerName}</span>
-                <span className="score">{entry.score}</span>
-              </li>
-            ))}
-          </ol>
-        </>
+      {/* ── Top 3 podium ── */}
+      {top3.length > 0 && (
+        <div className="lb-podium">
+          {top3.map((entry, idx) => (
+            <div
+              key={entry.id ?? entry.playerName}
+              className={`lb-podium__card lb-podium__card--${idx + 1}${entry.playerName === currentPlayerName ? ' lb-podium__card--me' : ''}`}
+            >
+              <span className="lb-podium__medal">{MEDALS[idx]}</span>
+              <span className="lb-podium__name">{entry.playerName}</span>
+              <span className="lb-podium__score">{entry.score.toLocaleString()}</span>
+            </div>
+          ))}
+        </div>
       )}
 
-      {scores.length > 5 && (
+      {/* ── Paginated rest ── */}
+      {rest.length > 0 && (
         <>
-          <p className="muted lb-section-label">All players</p>
-          <ol className="list all">
-            {scores.map((entry, idx) => (
-              <li
-                key={`all-${entry.id ?? entry.playerName}-${idx}`}
-                className={entry.playerName === currentPlayerName ? 'lb-row--me' : ''}
-              >
-                <span className="lb-rank-num">#{idx + 1}</span>
-                <span className="name">{entry.playerName}</span>
-                <span className="score">{entry.score}</span>
-                <span className="time">
-                  {new Date(entry.updated_at || entry.updatedAt || entry.created_at || entry.createdAt).toLocaleDateString()}
-                </span>
-              </li>
-            ))}
+          <p className="lb-section-label">All players</p>
+          <ol className="list all lb-list--paged">
+            {pageSlice.map((entry, idx) => {
+              const rank = page * PAGE_SIZE + idx + 4;
+              const isMe = entry.playerName === currentPlayerName;
+              return (
+                <li
+                  key={entry.id ?? entry.playerName}
+                  className={isMe ? 'lb-row--me' : ''}
+                >
+                  <span className="lb-rank-num">#{rank}</span>
+                  <span className="name">{entry.playerName}</span>
+                  <span className="score">{entry.score.toLocaleString()}</span>
+                </li>
+              );
+            })}
           </ol>
+
+          {totalPages > 1 && (
+            <div className="lb-pagination">
+              <button
+                className="lb-pagination__btn"
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={page === 0}
+              >
+                ← Prev
+              </button>
+              <span className="lb-pagination__info">
+                {page + 1} / {totalPages}
+              </span>
+              <button
+                className="lb-pagination__btn"
+                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                disabled={page === totalPages - 1}
+              >
+                Next →
+              </button>
+            </div>
+          )}
         </>
       )}
     </div>
