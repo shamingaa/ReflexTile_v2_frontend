@@ -123,14 +123,12 @@ function App() {
   const [nameGateLoading, setNameGateLoading] = useState(false);
   const [contactError,    setContactError]    = useState('');
 
+  const [installPrompt, setInstallPrompt] = useState(null);
+  const [iosInstallHint, setIosInstallHint] = useState(null); // null | 'safari' | 'other'
   const [drawerOpen, setDrawerOpen]   = useState(false);
   const [copyStatus, setCopyStatus]   = useState('');
-  const [shareStatus, setShareStatus] = useState('');
-  const [challengeStatus, setChallengeStatus] = useState('');
   const [noNameWarning, setNoNameWarning] = useState(false);
-  const [referralBonus, setReferralBonus] = useState(false);
   const [brandTaps, setBrandTaps] = useState(readBrandTaps);
-  const referralRef = useRef(null);
 
   // ── Sponsor splash (show once on first ever visit) ─────────────────────
   const [splashDone, setSplashDone] = useState(
@@ -146,19 +144,37 @@ function App() {
     return () => clearTimeout(t);
   }, [splashDone]); // eslint-disable-line
 
-  // ── Referral detection ─────────────────────────────────────────────────
+  // ── PWA install prompt ─────────────────────────────────────────────────
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const ref    = params.get('ref');
-    if (ref && ref !== deviceId) {
-      referralRef.current = ref;
-      // Clean URL without reload
-      const clean = window.location.pathname;
-      window.history.replaceState({}, '', clean);
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
+                         ('standalone' in navigator && navigator.standalone);
+    if (isStandalone) return; // already installed — show nothing
+
+    // Android / Chrome: listen for native install prompt
+    const handler = (e) => { e.preventDefault(); setInstallPrompt(e); };
+    window.addEventListener('beforeinstallprompt', handler);
+
+    // iOS detection (iPadOS 13+ reports as Mac, use touch check)
+    const ua    = navigator.userAgent;
+    const isIos = /iphone|ipad|ipod/i.test(ua) ||
+                  (ua.includes('Mac') && 'ontouchend' in document);
+    if (isIos) {
+      if (/crios/i.test(ua))       setIosInstallHint('chrome');
+      else if (/fxios/i.test(ua))  setIosInstallHint('firefox');
+      else if (/^((?!chrome|android|crios|fxios).)*safari/i.test(ua)) setIosInstallHint('safari');
     }
+
+    return () => window.removeEventListener('beforeinstallprompt', handler);
   }, []); // eslint-disable-line
 
-  const [personalBest, setPersonalBest] = useState(readPersonalBest);
+  const handleInstallApp = async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === 'accepted') setInstallPrompt(null);
+  };
+
+const [personalBest, setPersonalBest] = useState(readPersonalBest);
   const [dailyBest,    setDailyBest]    = useState(readDailyBest);
   const [loginStreak,  setLoginStreak]  = useState(readStreak);
   const [lastRun,      setLastRun]      = useState(null);
@@ -246,20 +262,7 @@ function App() {
       return;
     }
 
-    // Apply referral bonus on first-ever run
-    let bonusApplied = false;
-    let score = rawScore;
-    if (referralRef.current) {
-      try {
-        const prevRuns = JSON.parse(localStorage.getItem('arcade_arena_runs') || '[]');
-        if (prevRuns.length === 0) {
-          score += 50;
-          bonusApplied = true;
-        }
-      } catch { /* noop */ }
-      referralRef.current = null; // use only once
-    }
-
+    const score = rawScore;
     const today = todayStr();
 
     // Persist locally first so stats are saved even if server fails
@@ -284,11 +287,6 @@ function App() {
     setPersonalBest(newPB);
     setDailyBest(newDaily);
     setLoginStreak(newStreak);
-
-    if (bonusApplied) {
-      setReferralBonus(true);
-      setTimeout(() => setReferralBonus(false), 4000);
-    }
 
     // Refresh brand tap counts in UI
     setBrandTaps(readBrandTaps());
@@ -325,35 +323,6 @@ function App() {
     setTimeout(() => setCopyStatus(''), 1500);
   };
 
-  const handleShare = async () => {
-    if (!lastRun) return;
-    const rankText = lastRun.rank ? ` (rank #${lastRun.rank})` : '';
-    const text = `I scored ${lastRun.score} on Reflex Tile ${difficulty}${rankText} ft. Tuberway & 1Percent — can you beat it?`;
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: 'Reflex Tile', text });
-      } else {
-        await navigator.clipboard?.writeText(text);
-        setShareStatus('Copied to clipboard');
-        setTimeout(() => setShareStatus(''), 2000);
-      }
-    } catch { /* user cancelled */ }
-  };
-
-  const handleChallengeShare = async () => {
-    const url  = `${window.location.origin}${window.location.pathname}?ref=${deviceId}`;
-    const text = `Challenge accepted? Play Reflex Tile and beat my score ft. Tuberway & 1Percent: ${url}`;
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: 'Reflex Tile Challenge', text, url });
-      } else {
-        await navigator.clipboard?.writeText(url);
-        setChallengeStatus('Link copied!');
-        setTimeout(() => setChallengeStatus(''), 2000);
-      }
-    } catch { /* user cancelled */ }
-  };
-
   return (
     <div className="app-shell">
 
@@ -373,10 +342,7 @@ function App() {
       )}
 
 
-      {referralBonus && !drawerOpen && (
-        <div className="streak-banner referral-banner">+50 Referral bonus applied!</div>
-      )}
-      <header className="topbar">
+<header className="topbar">
         <div>
           <p className="eyebrow">Reflex Race</p>
           <h1>Reflex Tile</h1>
@@ -571,22 +537,55 @@ function App() {
                     )}
                     {lastRun.isNewPB  && <p className="new-best-inline">Personal best!</p>}
                     {lastRun.isNewDaily && !lastRun.isNewPB && <p className="new-best-inline">Best today!</p>}
-                    <button className="share-btn" onClick={handleShare}>
-                      Share score
-                      {shareStatus && <span className="share-toast">{shareStatus}</span>}
+                  </div>
+                )}
+
+{/* ── PWA install ── */}
+                {installPrompt && (
+                  <div className="pwa-install">
+                    <p className="pwa-install__label">Play offline, anytime</p>
+                    <p className="pwa-install__sub">Add Reflex Tile to your home screen for the full app experience.</p>
+                    <button className="pwa-install__btn" onClick={handleInstallApp}>
+                      ⬇ Install App
                     </button>
                   </div>
                 )}
 
-                {/* ── Referral / Challenge a friend ── */}
-                <div className="referral-section">
-                  <p className="referral-section__label">Challenge a friend</p>
-                  <p className="referral-section__sub">Share your personal link — they get a +50 bonus on their first run.</p>
-                  <button className="referral-btn" onClick={handleChallengeShare}>
-                    Copy invite link
-                    {challengeStatus && <span className="share-toast">{challengeStatus}</span>}
-                  </button>
-                </div>
+                {iosInstallHint === 'safari' && (
+                  <div className="pwa-install">
+                    <p className="pwa-install__label">Install App</p>
+                    <p className="pwa-install__sub">Install Reflex Tile for the full app experience — no App Store needed.</p>
+                    <ol className="pwa-install__steps">
+                      <li><span className="pwa-install__icon">⬆</span> Tap the <strong>Share</strong> button in Safari</li>
+                      <li><span className="pwa-install__icon">＋</span> Tap <strong>Install App</strong></li>
+                      <li><span className="pwa-install__icon">✓</span> Tap <strong>Add</strong> to confirm</li>
+                    </ol>
+                  </div>
+                )}
+
+                {iosInstallHint === 'chrome' && (
+                  <div className="pwa-install">
+                    <p className="pwa-install__label">Install App</p>
+                    <p className="pwa-install__sub">Install Reflex Tile directly from Chrome — no App Store needed.</p>
+                    <ol className="pwa-install__steps">
+                      <li><span className="pwa-install__icon">⋯</span> Tap the <strong>three-dot menu</strong> (⋮) at the bottom of Chrome</li>
+                      <li><span className="pwa-install__icon">＋</span> Tap <strong>Install App</strong></li>
+                      <li><span className="pwa-install__icon">✓</span> Tap <strong>Add</strong> to confirm</li>
+                    </ol>
+                  </div>
+                )}
+
+                {iosInstallHint === 'firefox' && (
+                  <div className="pwa-install">
+                    <p className="pwa-install__label">Install App</p>
+                    <p className="pwa-install__sub">Install Reflex Tile directly from Firefox — no App Store needed.</p>
+                    <ol className="pwa-install__steps">
+                      <li><span className="pwa-install__icon">⋯</span> Tap the <strong>menu button</strong> (☰) at the bottom of Firefox</li>
+                      <li><span className="pwa-install__icon">＋</span> Tap <strong>Install App</strong></li>
+                      <li><span className="pwa-install__icon">✓</span> Tap <strong>Add</strong> to confirm</li>
+                    </ol>
+                  </div>
+                )}
 
                 {/* ── Brand tap analytics — always visible ── */}
                 <div className="brand-analytics">

@@ -1294,6 +1294,67 @@ h1 { margin: 0; font-size: 28px; letter-spacing: -0.4px; }
   color: var(--accent-2);
 }
 
+/* ── PWA install section ────────────────────────────────────────────────── */
+.pwa-install {
+  background: rgba(124,243,197,0.05);
+  border: 1px solid rgba(124,243,197,0.2);
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 10px;
+}
+.pwa-install__label {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+}
+.pwa-install__sub {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+.pwa-install__btn {
+  margin-top: 4px;
+  background: var(--accent);
+  color: #041017;
+  border: none;
+  border-radius: 10px;
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  transition: opacity 0.15s;
+}
+.pwa-install__btn:hover { opacity: 0.85; }
+.pwa-install__steps {
+  margin: 4px 0 0;
+  padding-left: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pwa-install__steps li {
+  font-size: 12px;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1.4;
+}
+.pwa-install__icon {
+  font-size: 14px;
+  width: 22px;
+  text-align: center;
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
 /* ── Referral / challenge section ──────────────────────────────────────── */
 .referral-section {
   background: rgba(90,209,255,0.06);
