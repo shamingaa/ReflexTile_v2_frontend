@@ -373,7 +373,7 @@ function App() {
       )}
 
 
-      {referralBonus && (
+      {referralBonus && !drawerOpen && (
         <div className="streak-banner referral-banner">+50 Referral bonus applied!</div>
       )}
       <header className="topbar">
@@ -398,10 +398,10 @@ function App() {
         <p className="lede lede--tight">Tap the glowing orb before it fades. Keep the timer alive to climb the board.</p>
       )}
 
-      {loginStreak >= 2 && view === 'game' && nameLocked && (
+      {loginStreak >= 2 && view === 'game' && nameLocked && !drawerOpen && (
         <div className="streak-banner">{loginStreak} day streak — keep it going!</div>
       )}
-      {noNameWarning && (
+      {noNameWarning && !drawerOpen && (
         <div className="warning-banner">Set a player name in Settings to save your score.</div>
       )}
 

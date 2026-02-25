@@ -102,17 +102,25 @@ function LineChart({ days }) {
 
   return (
     <div style={{ position: 'relative' }}>
-      {hovered !== null && points[hovered]?.score !== null && (
-        <div
-          className="chart-tooltip"
-          style={{
-            left: `calc(${((points[hovered].px - PAD_L) / PLOT_W) * 100}% + ${PAD_L}px)`,
-          }}
-        >
-          <span className="chart-tooltip__score">{points[hovered].score.toLocaleString()}</span>
-          <span className="chart-tooltip__date">{points[hovered].label}</span>
-        </div>
-      )}
+      {hovered !== null && points[hovered]?.score !== null && (() => {
+        const hov = points[hovered];
+        const showBelow = hov.py < PAD_T + 55;
+        return (
+          <div
+            className="chart-tooltip"
+            style={{
+              left: `clamp(50px, ${(hov.px / SVG_W) * 100}%, calc(100% - 50px))`,
+              top: `${(hov.py / SVG_H) * 100}%`,
+              transform: showBelow
+                ? 'translate(-50%, 10px)'
+                : 'translate(-50%, calc(-100% - 10px))',
+            }}
+          >
+            <span className="chart-tooltip__score">{hov.score.toLocaleString()}</span>
+            <span className="chart-tooltip__date">{hov.label}</span>
+          </div>
+        );
+      })()}
       <svg
         viewBox={`0 0 ${SVG_W} ${SVG_H}`}
         className="stats-chart"
