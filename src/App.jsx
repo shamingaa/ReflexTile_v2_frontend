@@ -265,6 +265,7 @@ const [personalBest, setPersonalBest] = useState(readPersonalBest);
     avgReaction   = null,
     maxStreak     = 0,
     logoTaps      = 0,
+    reactionSD    = null,
     sessionId     = null,
   }) => {
     setError('');
@@ -309,7 +310,7 @@ const [personalBest, setPersonalBest] = useState(readPersonalBest);
     checkAndUnlock({ score, maxStreak, accuracy, fastestHit, logoTaps, loginStreak: newStreak });
 
     try {
-      const result = await submitScore({ playerName, score, mode, deviceId, contact, sessionId });
+      const result = await submitScore({ playerName, score, mode, deviceId, contact, sessionId, hits, fastestHit, avgReaction, reactionSD });
       if (result.queued) {
         // Offline / server down — score saved locally, will sync automatically
         setLastRun({
@@ -336,7 +337,9 @@ const [personalBest, setPersonalBest] = useState(readPersonalBest);
       }
     } catch (err) {
       console.error(err);
-      if (err.message === 'score_unverifiable') {
+      if (err.message === 'competition_closed') {
+        setError('The competition has ended — scores are no longer being accepted.');
+      } else if (err.message === 'score_unverifiable') {
         setError('Score could not be verified — please play again.');
       } else {
         setError(err.message || 'Could not save score');

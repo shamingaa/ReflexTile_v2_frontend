@@ -2,22 +2,9 @@ import React, { useState, useEffect, useMemo } from 'react';
 
 const PAGE_SIZE = 10;
 
-function nextSundayCountdown() {
-  const now      = new Date();
-  const day      = now.getUTCDay();
-  const daysLeft = day === 0 ? 7 : 7 - day;
-  const next     = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + daysLeft));
-  const diff     = next - now;
-  const d        = Math.floor(diff / 86_400_000);
-  const h        = Math.floor((diff % 86_400_000) / 3_600_000);
-  if (d === 0) return `${h}h`;
-  return `${d}d ${h}h`;
-}
-
 const MEDALS = ['🥇', '🥈', '🥉'];
 
 function Leaderboard({ scores, loading, error, period = 'all', onPeriodChange, currentPlayerName = '', tapChampion = null }) {
-  const resetIn = useMemo(nextSundayCountdown, []);
 
   const top3 = scores.slice(0, 3);
   const rest  = scores.slice(3);
@@ -58,10 +45,6 @@ function Leaderboard({ scores, loading, error, period = 'all', onPeriodChange, c
           </button>
         </div>
       </div>
-
-      {period === 'week' && (
-        <p className="lb-reset-label">Resets in {resetIn}</p>
-      )}
 
       {loading && <p className="muted">Loading…</p>}
       {error   && <p className="error">{error}</p>}

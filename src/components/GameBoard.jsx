@@ -89,6 +89,15 @@ const pickCell = (previous, banned = [], count) => {
 
 const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
 
+// Population standard deviation of reaction times.
+// Returns null when fewer than 3 samples (not enough data to be meaningful).
+const computeReactionSD = (arr) => {
+  if (arr.length < 3) return null;
+  const mean = arr.reduce((s, v) => s + v, 0) / arr.length;
+  const variance = arr.reduce((s, v) => s + (v - mean) ** 2, 0) / arr.length;
+  return Math.round(Math.sqrt(variance));
+};
+
 // ─── Component ──────────────────────────────────────────────────────────────
 
 function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personalBest = 0, lastRank = null, deviceId = '' }) {
@@ -158,11 +167,12 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
   const logoTapsRef          = useRef(0);          // logo tiles tapped this run
   const sessionIdRef         = useRef(null);        // one-time server token, requested at game start
   // Stat refs — synchronous counterparts for state; read by endRun
-  const hitsRef          = useRef(0);
-  const missesRef        = useRef(0);
-  const fastestHitRef    = useRef(null);
-  const totalReactionRef = useRef(0);
-  const maxStreakRef     = useRef(0);
+  const hitsRef           = useRef(0);
+  const missesRef         = useRef(0);
+  const fastestHitRef     = useRef(null);
+  const totalReactionRef  = useRef(0);
+  const maxStreakRef      = useRef(0);
+  const reactionTimesRef  = useRef([]);  // individual reaction times for SD computation
 
   const settings         = useMemo(() => DIFFICULTY[difficulty] ?? DIFFICULTY.normal, [difficulty]);
   const difficultyWindow = useMemo(
@@ -391,6 +401,7 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
       avgReaction: totalHits > 0 ? Math.round(totalReactionRef.current / totalHits) : null,
       maxStreak:   maxStreakRef.current,
       logoTaps:    logoTapsRef.current,
+      reactionSD:  computeReactionSD(reactionTimesRef.current),
       sessionId:   sessionIdRef.current,
     });
   };
@@ -428,6 +439,7 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
     fastestHitRef.current = null;
     totalReactionRef.current = 0;
     maxStreakRef.current = 0;
+    reactionTimesRef.current = [];
     songPosRef.current = 0;
     logoTapsRef.current = 0;
     sessionIdRef.current = null;
@@ -635,6 +647,7 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
     setHits((prev) => prev + 1);
     hitsRef.current += 1;
     totalReactionRef.current += reaction;
+    reactionTimesRef.current.push(reactionRounded);
     if (fastestHitRef.current === null || reactionRounded < fastestHitRef.current) {
       fastestHitRef.current = reactionRounded;
     }
@@ -873,7 +886,7 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
               )}
 
               <button className="cta" onClick={reset}>
-                {status === 'idle' ? 'Start' : 'Play Again  (Space)'}
+                {status === 'idle' ? 'Start' : 'Play Again'}
               </button>
 
               <div className="sponsor-credits">

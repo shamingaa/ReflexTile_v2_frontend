@@ -51,31 +51,32 @@ export async function registerPlayer({ playerName, deviceId, contact }) {
 // On network/server failure: queues to localStorage and returns { queued: true }.
 // On 403 (session invalid/expired): throws — the score cannot be verified, do not queue.
 // On 409 (name conflict): throws — user must act.
-export async function submitScore({ playerName, score, mode, deviceId, contact, sessionId }) {
+export async function submitScore({ playerName, score, mode, deviceId, contact, sessionId, hits, fastestHit, avgReaction, reactionSD }) {
   try {
     const res = await fetch(`${base}/api/scores`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ playerName, score, mode, deviceId, contact, sessionId }),
+      body: JSON.stringify({ playerName, score, mode, deviceId, contact, sessionId, hits, fastestHit, avgReaction, reactionSD }),
     });
     if (res.status === 409) throw new Error('That name is taken — pick another one.');
-    if (res.status === 403) throw new Error('score_unverifiable'); // session invalid — don't queue
+    if (res.status === 403) throw new Error('score_unverifiable'); // security check failed — don't queue
+    if (res.status === 503) throw new Error('competition_closed'); // competition closed — don't queue
     if (!res.ok) throw new Error('Failed to store score');
     return res.json();
   } catch (err) {
     // These errors must propagate — no point queueing
-    if (err.message.includes('name is taken') || err.message === 'score_unverifiable') throw err;
-    // Network or server error — enqueue with sessionId; keep highest score per device+mode
+    if (err.message.includes('name is taken') || err.message === 'score_unverifiable' || err.message === 'competition_closed') throw err;
+    // Network or server error — enqueue; keep highest score per device+mode
     try {
       const queue = JSON.parse(localStorage.getItem(SCORE_QUEUE_KEY) || '[]');
       const normalizedMode = mode || 'solo';
       const idx = queue.findIndex((q) => q.deviceId === deviceId && q.mode === normalizedMode);
       if (idx >= 0) {
         if (queue[idx].score < score) {
-          queue[idx] = { playerName, score, mode: normalizedMode, deviceId, contact, sessionId, queuedAt: Date.now() };
+          queue[idx] = { playerName, score, mode: normalizedMode, deviceId, contact, sessionId, hits, fastestHit, avgReaction, reactionSD, queuedAt: Date.now() };
         }
       } else {
-        queue.push({ playerName, score, mode: normalizedMode, deviceId, contact, sessionId, queuedAt: Date.now() });
+        queue.push({ playerName, score, mode: normalizedMode, deviceId, contact, sessionId, hits, fastestHit, avgReaction, reactionSD, queuedAt: Date.now() });
       }
       localStorage.setItem(SCORE_QUEUE_KEY, JSON.stringify(queue));
     } catch { /* noop */ }
