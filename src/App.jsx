@@ -328,10 +328,10 @@ function App() {
   const handleShare = async () => {
     if (!lastRun) return;
     const rankText = lastRun.rank ? ` (rank #${lastRun.rank})` : '';
-    const text = `I scored ${lastRun.score} on Arcade Arena ${difficulty}${rankText} ft. Tuberway & 1Percent — can you beat it?`;
+    const text = `I scored ${lastRun.score} on Reflex Tile ${difficulty}${rankText} ft. Tuberway & 1Percent — can you beat it?`;
     try {
       if (navigator.share) {
-        await navigator.share({ title: 'Arcade Arena', text });
+        await navigator.share({ title: 'Reflex Tile', text });
       } else {
         await navigator.clipboard?.writeText(text);
         setShareStatus('Copied to clipboard');
@@ -342,10 +342,10 @@ function App() {
 
   const handleChallengeShare = async () => {
     const url  = `${window.location.origin}${window.location.pathname}?ref=${deviceId}`;
-    const text = `Challenge accepted? Play Arcade Arena and beat my score ft. Tuberway & 1Percent: ${url}`;
+    const text = `Challenge accepted? Play Reflex Tile and beat my score ft. Tuberway & 1Percent: ${url}`;
     try {
       if (navigator.share) {
-        await navigator.share({ title: 'Arcade Arena Challenge', text, url });
+        await navigator.share({ title: 'Reflex Tile Challenge', text, url });
       } else {
         await navigator.clipboard?.writeText(url);
         setChallengeStatus('Link copied!');
@@ -379,7 +379,7 @@ function App() {
       <header className="topbar">
         <div>
           <p className="eyebrow">Reflex Race</p>
-          <h1>Arcade Arena</h1>
+          <h1>Reflex Tile</h1>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button

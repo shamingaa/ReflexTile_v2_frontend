@@ -1,4 +1,4 @@
-const CACHE  = 'arcade-arena-v1';
+const CACHE  = 'reflex-tile-v1';
 const ASSETS = [
   '/',
   '/Asake-Lonely-At-The-Top.mp3',

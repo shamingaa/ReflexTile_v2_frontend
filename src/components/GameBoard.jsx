@@ -801,7 +801,7 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
         {(status === 'idle' || status === 'done') && (
           <div className="overlay-screen">
             <div className="overlay-card">
-              <p className="headline">{status === 'idle' ? 'Arcade Arena' : 'Run Complete'}</p>
+              <p className="headline">{status === 'idle' ? 'Reflex Tile' : 'Run Complete'}</p>
 
               {status === 'done' ? (
                 <>
