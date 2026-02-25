@@ -1,5 +1,9 @@
 const base = import.meta.env.VITE_API_BASE || '';
 
+const BRAND_TAPS_KEY  = 'arcade_arena_brand_taps';
+const SCORE_QUEUE_KEY = 'arcade_arena_score_queue';
+const TAP_QUEUE_KEY   = 'arcade_arena_tap_queue';
+
 export async function fetchScores(mode, period) {
   const query = new URLSearchParams();
   if (mode)           query.set('mode',   mode);
@@ -24,33 +28,133 @@ export async function registerPlayer({ playerName, deviceId, contact }) {
   return res.json();
 }
 
+// ── submitScore ──────────────────────────────────────────────────────────────
+// On network/server failure: queues to localStorage and returns { queued: true }
+// so the caller can continue without showing an error to the player.
+// Only rethrows on name-conflict (409) because that needs user action.
 export async function submitScore({ playerName, score, mode, deviceId, contact }) {
-  const res = await fetch(`${base}/api/scores`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ playerName, score, mode, deviceId, contact }),
-  });
-  if (res.status === 409) throw new Error('That name is taken — pick another one.');
-  if (!res.ok) throw new Error('Failed to store score');
-  return res.json();
+  try {
+    const res = await fetch(`${base}/api/scores`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerName, score, mode, deviceId, contact }),
+    });
+    if (res.status === 409) throw new Error('That name is taken — pick another one.');
+    if (!res.ok) throw new Error('Failed to store score');
+    return res.json();
+  } catch (err) {
+    if (err.message.includes('name is taken')) throw err; // user must act
+    // Network or server error — enqueue; keep highest score per device+mode
+    try {
+      const queue = JSON.parse(localStorage.getItem(SCORE_QUEUE_KEY) || '[]');
+      const normalizedMode = mode || 'solo';
+      const idx = queue.findIndex((q) => q.deviceId === deviceId && q.mode === normalizedMode);
+      if (idx >= 0) {
+        if (queue[idx].score < score) {
+          queue[idx] = { playerName, score, mode: normalizedMode, deviceId, contact, queuedAt: Date.now() };
+        }
+      } else {
+        queue.push({ playerName, score, mode: normalizedMode, deviceId, contact, queuedAt: Date.now() });
+      }
+      localStorage.setItem(SCORE_QUEUE_KEY, JSON.stringify(queue));
+    } catch { /* noop */ }
+    return { queued: true };
+  }
 }
 
-const BRAND_TAPS_KEY = 'arcade_arena_brand_taps';
-
+// ── trackLogoTap ─────────────────────────────────────────────────────────────
+// Sends the running total (not an increment) so the server can use MAX — safe to retry.
+// On failure: queues the latest total for retry.
 export function trackLogoTap(brand, deviceId) {
-  // Store locally for UI display
+  let newTotal = 1;
   try {
     const taps = JSON.parse(localStorage.getItem(BRAND_TAPS_KEY) || '{}');
     taps[brand] = (taps[brand] || 0) + 1;
+    newTotal = taps[brand];
     localStorage.setItem(BRAND_TAPS_KEY, JSON.stringify(taps));
   } catch { /* noop */ }
 
-  // Fire-and-forget to server
   fetch(`${base}/api/analytics/logo`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ brand, deviceId, event: 'tap' }),
-  }).catch(() => { /* no network — that's ok */ });
+    body: JSON.stringify({ brand, deviceId, taps: newTotal }),
+  }).catch(() => {
+    // Queue latest total for retry; keep highest total per brand+device
+    try {
+      const queue = JSON.parse(localStorage.getItem(TAP_QUEUE_KEY) || '[]');
+      const idx = queue.findIndex((q) => q.brand === brand && q.deviceId === deviceId);
+      if (idx >= 0) {
+        queue[idx].total = Math.max(queue[idx].total, newTotal);
+      } else {
+        queue.push({ brand, deviceId, total: newTotal, queuedAt: Date.now() });
+      }
+      localStorage.setItem(TAP_QUEUE_KEY, JSON.stringify(queue));
+    } catch { /* noop */ }
+  });
+}
+
+// ── drainQueues ───────────────────────────────────────────────────────────────
+// Retries all queued score submissions and tap syncs.
+// Returns { scoresSynced: N } so the caller can refresh the leaderboard if needed.
+export async function drainQueues() {
+  let scoresSynced = 0;
+
+  // -- scores --
+  try {
+    const queue = JSON.parse(localStorage.getItem(SCORE_QUEUE_KEY) || '[]');
+    if (queue.length) {
+      const remaining = [];
+      for (const item of queue) {
+        try {
+          await new Promise((r) => setTimeout(r, 300)); // respect 5s rate-limit gap
+          const res = await fetch(`${base}/api/scores`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(item),
+          });
+          if (res.ok || res.status === 409) {
+            scoresSynced++; // 409 = name conflict — discard, don't retry
+          } else {
+            remaining.push(item);
+          }
+        } catch {
+          remaining.push(item);
+        }
+      }
+      localStorage.setItem(SCORE_QUEUE_KEY, JSON.stringify(remaining));
+    }
+  } catch { /* noop */ }
+
+  // -- taps --
+  try {
+    const queue = JSON.parse(localStorage.getItem(TAP_QUEUE_KEY) || '[]');
+    if (queue.length) {
+      const remaining = [];
+      for (const item of queue) {
+        try {
+          const res = await fetch(`${base}/api/analytics/logo`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ brand: item.brand, deviceId: item.deviceId, taps: item.total }),
+          });
+          if (!res.ok) remaining.push(item);
+        } catch {
+          remaining.push(item);
+        }
+      }
+      localStorage.setItem(TAP_QUEUE_KEY, JSON.stringify(remaining));
+    }
+  } catch { /* noop */ }
+
+  return { scoresSynced };
+}
+
+export function hasPendingQueue() {
+  try {
+    const s = JSON.parse(localStorage.getItem(SCORE_QUEUE_KEY) || '[]');
+    const t = JSON.parse(localStorage.getItem(TAP_QUEUE_KEY) || '[]');
+    return s.length + t.length;
+  } catch { return 0; }
 }
 
 export async function fetchTapLeaderboard() {

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import GameBoard from './components/GameBoard';
 import StatsPage from './components/StatsPage';
 import Leaderboard from './Leaderboard';
-import { fetchScores, submitScore, registerPlayer, readBrandTaps, fetchTapLeaderboard } from './api';
+import { fetchScores, submitScore, registerPlayer, readBrandTaps, fetchTapLeaderboard, drainQueues } from './api';
 import { checkAndUnlock } from './achievements';
 import './styles.css';
 
@@ -202,6 +202,17 @@ const [personalBest, setPersonalBest] = useState(readPersonalBest);
   useEffect(() => { loadScores(mode, lbPeriod); }, [mode, lbPeriod]); // eslint-disable-line
   useEffect(() => { loadTapScores(); }, []); // eslint-disable-line
 
+  // ── Offline queue: drain on mount and whenever the device reconnects ───────
+  useEffect(() => {
+    const drain = () =>
+      drainQueues().then(({ scoresSynced }) => {
+        if (scoresSynced > 0) loadScores(mode, lbPeriod);
+      });
+    drain(); // attempt immediately on load
+    window.addEventListener('online', drain);
+    return () => window.removeEventListener('online', drain);
+  }, []); // eslint-disable-line
+
   const handleSaveName = async () => {
     const cleaned = pendingName.trim();
     const cleanedContact = pendingContact.trim();
@@ -295,19 +306,33 @@ const [personalBest, setPersonalBest] = useState(readPersonalBest);
     checkAndUnlock({ score, maxStreak, accuracy, fastestHit, logoTaps, loginStreak: newStreak });
 
     try {
-      await submitScore({ playerName, score, mode, deviceId, contact });
-      const updated = await fetchScores(mode, lbPeriod);
-      setScores(updated);
-      const rank = updated.findIndex((s) => s.playerName === playerName) + 1;
-      setLastRun({
-        score,
-        rank:       rank > 0 ? rank : null,
-        isNewPB:    score >= newPB,
-        isNewDaily: score >= newDaily,
-        streak:     newStreak,
-      });
-      loadTapScores();
+      const result = await submitScore({ playerName, score, mode, deviceId, contact });
+      if (result.queued) {
+        // Offline / server down — score saved locally, will sync automatically
+        setLastRun({
+          score,
+          rank:       null,
+          isNewPB:    score >= newPB,
+          isNewDaily: score >= newDaily,
+          streak:     newStreak,
+          isPending:  true,
+        });
+      } else {
+        const updated = await fetchScores(mode, lbPeriod);
+        setScores(updated);
+        const rank = updated.findIndex((s) => s.playerName === playerName) + 1;
+        setLastRun({
+          score,
+          rank:       rank > 0 ? rank : null,
+          isNewPB:    score >= newPB,
+          isNewDaily: score >= newDaily,
+          streak:     newStreak,
+          isPending:  false,
+        });
+        loadTapScores();
+      }
     } catch (err) {
+      // Only name-conflict errors reach here
       console.error(err);
       setError(err.message || 'Could not save score');
     }
@@ -534,6 +559,9 @@ const [personalBest, setPersonalBest] = useState(readPersonalBest);
                         <span className="last-run-label">Global rank</span>
                         <span className="last-run-value">#{lastRun.rank}</span>
                       </div>
+                    )}
+                    {lastRun.isPending && (
+                      <p className="sync-pending-note">Score saved — syncing when online</p>
                     )}
                     {lastRun.isNewPB  && <p className="new-best-inline">Personal best!</p>}
                     {lastRun.isNewDaily && !lastRun.isNewPB && <p className="new-best-inline">Best today!</p>}
