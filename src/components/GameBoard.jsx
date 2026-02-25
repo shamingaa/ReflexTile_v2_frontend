@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { trackLogoTap } from '../api';
+import { trackLogoTap, requestGameSession } from '../api';
 
 const FLASH_DURATION = 180;
 
@@ -156,6 +156,7 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
   })());
   const prevRunScoreRef      = useRef(null);       // score of the run before this one
   const logoTapsRef          = useRef(0);          // logo tiles tapped this run
+  const sessionIdRef         = useRef(null);        // one-time server token, requested at game start
   // Stat refs — synchronous counterparts for state; read by endRun
   const hitsRef          = useRef(0);
   const missesRef        = useRef(0);
@@ -273,6 +274,10 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
     if (countdown === 'GO!') {
       playTone(1047, 280, 0.22);
       spawnTimeRef.current = performance.now();
+      // Request session token during the GO! pause (650ms window).
+      // Stored in a ref — cannot be read or forged via DevTools localStorage.
+      sessionIdRef.current = null;
+      requestGameSession(deviceId).then((id) => { sessionIdRef.current = id; });
       const t = setTimeout(() => { setCountdown(null); setStatus('playing'); }, 650);
       return () => clearTimeout(t);
     }
@@ -386,6 +391,7 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
       avgReaction: totalHits > 0 ? Math.round(totalReactionRef.current / totalHits) : null,
       maxStreak:   maxStreakRef.current,
       logoTaps:    logoTapsRef.current,
+      sessionId:   sessionIdRef.current,
     });
   };
 
@@ -424,6 +430,7 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
     maxStreakRef.current = 0;
     songPosRef.current = 0;
     logoTapsRef.current = 0;
+    sessionIdRef.current = null;
     nextLogoAtRef.current = 4 + Math.floor(Math.random() * 3);
     logoIdxRef.current = 0;
     pbBeatenRef.current = false;

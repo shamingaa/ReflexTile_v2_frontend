@@ -4,6 +4,25 @@ const BRAND_TAPS_KEY  = 'arcade_arena_brand_taps';
 const SCORE_QUEUE_KEY = 'arcade_arena_score_queue';
 const TAP_QUEUE_KEY   = 'arcade_arena_tap_queue';
 
+// Must match server SESSION_TTL + buffer so client discards stale queue items
+// before even attempting the request (saves a round-trip).
+const CLIENT_SESSION_TTL = 35 * 60 * 1000; // 35 min
+
+// ── requestGameSession ───────────────────────────────────────────────────────
+// Called at game-start. Returns a one-time token or null (offline / error).
+export async function requestGameSession(deviceId) {
+  try {
+    const res = await fetch(`${base}/api/scores/session`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.sessionId || null;
+  } catch { return null; }
+}
+
 export async function fetchScores(mode, period) {
   const query = new URLSearchParams();
   if (mode)           query.set('mode',   mode);
@@ -29,32 +48,34 @@ export async function registerPlayer({ playerName, deviceId, contact }) {
 }
 
 // ── submitScore ──────────────────────────────────────────────────────────────
-// On network/server failure: queues to localStorage and returns { queued: true }
-// so the caller can continue without showing an error to the player.
-// Only rethrows on name-conflict (409) because that needs user action.
-export async function submitScore({ playerName, score, mode, deviceId, contact }) {
+// On network/server failure: queues to localStorage and returns { queued: true }.
+// On 403 (session invalid/expired): throws — the score cannot be verified, do not queue.
+// On 409 (name conflict): throws — user must act.
+export async function submitScore({ playerName, score, mode, deviceId, contact, sessionId }) {
   try {
     const res = await fetch(`${base}/api/scores`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ playerName, score, mode, deviceId, contact }),
+      body: JSON.stringify({ playerName, score, mode, deviceId, contact, sessionId }),
     });
     if (res.status === 409) throw new Error('That name is taken — pick another one.');
+    if (res.status === 403) throw new Error('score_unverifiable'); // session invalid — don't queue
     if (!res.ok) throw new Error('Failed to store score');
     return res.json();
   } catch (err) {
-    if (err.message.includes('name is taken')) throw err; // user must act
-    // Network or server error — enqueue; keep highest score per device+mode
+    // These errors must propagate — no point queueing
+    if (err.message.includes('name is taken') || err.message === 'score_unverifiable') throw err;
+    // Network or server error — enqueue with sessionId; keep highest score per device+mode
     try {
       const queue = JSON.parse(localStorage.getItem(SCORE_QUEUE_KEY) || '[]');
       const normalizedMode = mode || 'solo';
       const idx = queue.findIndex((q) => q.deviceId === deviceId && q.mode === normalizedMode);
       if (idx >= 0) {
         if (queue[idx].score < score) {
-          queue[idx] = { playerName, score, mode: normalizedMode, deviceId, contact, queuedAt: Date.now() };
+          queue[idx] = { playerName, score, mode: normalizedMode, deviceId, contact, sessionId, queuedAt: Date.now() };
         }
       } else {
-        queue.push({ playerName, score, mode: normalizedMode, deviceId, contact, queuedAt: Date.now() });
+        queue.push({ playerName, score, mode: normalizedMode, deviceId, contact, sessionId, queuedAt: Date.now() });
       }
       localStorage.setItem(SCORE_QUEUE_KEY, JSON.stringify(queue));
     } catch { /* noop */ }
@@ -105,20 +126,24 @@ export async function drainQueues() {
     if (queue.length) {
       const remaining = [];
       for (const item of queue) {
+        // Discard items whose session token has definitely expired (saves a round-trip)
+        if (item.queuedAt && Date.now() - item.queuedAt > CLIENT_SESSION_TTL) continue;
         try {
-          await new Promise((r) => setTimeout(r, 300)); // respect 5s rate-limit gap
+          await new Promise((r) => setTimeout(r, 300)); // respect rate-limit gap
           const res = await fetch(`${base}/api/scores`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(item),
           });
-          if (res.ok || res.status === 409) {
-            scoresSynced++; // 409 = name conflict — discard, don't retry
+          if (res.ok) {
+            scoresSynced++;
+          } else if (res.status === 409 || res.status === 403) {
+            // Name conflict or session invalid — discard, do not retry
           } else {
-            remaining.push(item);
+            remaining.push(item); // transient server error — keep for next attempt
           }
         } catch {
-          remaining.push(item);
+          remaining.push(item); // network error — keep for next attempt
         }
       }
       localStorage.setItem(SCORE_QUEUE_KEY, JSON.stringify(remaining));

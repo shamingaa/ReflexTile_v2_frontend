@@ -265,6 +265,7 @@ const [personalBest, setPersonalBest] = useState(readPersonalBest);
     avgReaction   = null,
     maxStreak     = 0,
     logoTaps      = 0,
+    sessionId     = null,
   }) => {
     // FIX: was a silent drop — now warns the user
     if (!playerName.trim() || !nameLocked) {
@@ -306,7 +307,7 @@ const [personalBest, setPersonalBest] = useState(readPersonalBest);
     checkAndUnlock({ score, maxStreak, accuracy, fastestHit, logoTaps, loginStreak: newStreak });
 
     try {
-      const result = await submitScore({ playerName, score, mode, deviceId, contact });
+      const result = await submitScore({ playerName, score, mode, deviceId, contact, sessionId });
       if (result.queued) {
         // Offline / server down — score saved locally, will sync automatically
         setLastRun({
@@ -332,9 +333,12 @@ const [personalBest, setPersonalBest] = useState(readPersonalBest);
         loadTapScores();
       }
     } catch (err) {
-      // Only name-conflict errors reach here
       console.error(err);
-      setError(err.message || 'Could not save score');
+      if (err.message === 'score_unverifiable') {
+        setError('Score could not be verified — please play again.');
+      } else {
+        setError(err.message || 'Could not save score');
+      }
     }
   };
 
