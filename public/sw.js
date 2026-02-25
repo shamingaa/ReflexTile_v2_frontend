@@ -4,6 +4,7 @@ const ASSETS = [
   '/Asake-Lonely-At-The-Top.mp3',
   '/logo_one.png',
   '/logo_two.png',
+  '/reflexIcon.png',
 ];
 
 self.addEventListener('install', (e) => {

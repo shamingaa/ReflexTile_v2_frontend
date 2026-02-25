@@ -9,14 +9,20 @@
   "theme_color": "#7cf3c5",
   "icons": [
     {
-      "src": "/logo_one.png",
+      "src": "/reflexIcon.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
-      "src": "/logo_one.png",
+      "src": "/reflexIcon.png",
       "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/reflexIcon.png",
+      "sizes": "1024x1024",
       "type": "image/png",
       "purpose": "any"
     }
