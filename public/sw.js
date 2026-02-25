@@ -1,4 +1,4 @@
-const CACHE  = 'reflex-tile-v1';
+const CACHE  = 'reflex-tile-v2';
 const ASSETS = [
   '/',
   '/Asake-Lonely-At-The-Top.mp3',

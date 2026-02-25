@@ -36,7 +36,7 @@ export const checkAndUnlock = ({ score, maxStreak, accuracy, fastestHit, logoTap
 
   const check = (id, condition) => {
     if (!stored[id] && condition) {
-      stored[id] = true;
+      stored[id] = Date.now();
       const def = ACHIEVEMENTS.find((a) => a.id === id);
       if (def) newOnes.push(def);
     }

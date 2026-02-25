@@ -267,6 +267,7 @@ const [personalBest, setPersonalBest] = useState(readPersonalBest);
     logoTaps      = 0,
     sessionId     = null,
   }) => {
+    setError('');
     // FIX: was a silent drop — now warns the user
     if (!playerName.trim() || !nameLocked) {
       setNoNameWarning(true);
@@ -292,6 +293,7 @@ const [personalBest, setPersonalBest] = useState(readPersonalBest);
       maxStreak,
     });
 
+    const oldPB     = readPersonalBest();
     const newPB     = updatePersonalBest(score);
     const newDaily  = updateDailyBest(score);
     const newStreak = touchStreak();
@@ -313,7 +315,7 @@ const [personalBest, setPersonalBest] = useState(readPersonalBest);
         setLastRun({
           score,
           rank:       null,
-          isNewPB:    score >= newPB,
+          isNewPB:    score > oldPB,
           isNewDaily: score >= newDaily,
           streak:     newStreak,
           isPending:  true,
@@ -325,7 +327,7 @@ const [personalBest, setPersonalBest] = useState(readPersonalBest);
         setLastRun({
           score,
           rank:       rank > 0 ? rank : null,
-          isNewPB:    score >= newPB,
+          isNewPB:    score > oldPB,
           isNewDaily: score >= newDaily,
           streak:     newStreak,
           isPending:  false,
@@ -373,7 +375,7 @@ const [personalBest, setPersonalBest] = useState(readPersonalBest);
 
 <header className="topbar">
         <div>
-          <p className="eyebrow">Reflex Race</p>
+          <p className="eyebrow">Competition</p>
           <h1>Reflex Tile</h1>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -556,7 +558,7 @@ const [personalBest, setPersonalBest] = useState(readPersonalBest);
                   <div className="last-run-card">
                     <div className="last-run-row">
                       <span className="last-run-label">Last score</span>
-                      <span className="last-run-value accent">{lastRun.score}</span>
+                      <span className="last-run-value accent">{lastRun.score.toLocaleString()}</span>
                     </div>
                     {lastRun.rank && (
                       <div className="last-run-row">
