@@ -379,7 +379,7 @@ const [personalBest, setPersonalBest] = useState(readPersonalBest);
 <header className="topbar">
         <div>
           <p className="eyebrow">Competition</p>
-          <h1>Reflex Tile</h1>
+          <h1>Reflex Titan</h1>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button
@@ -581,7 +581,7 @@ const [personalBest, setPersonalBest] = useState(readPersonalBest);
                 {installPrompt && (
                   <div className="pwa-install">
                     <p className="pwa-install__label">Play offline, anytime</p>
-                    <p className="pwa-install__sub">Add Reflex Tile to your home screen for the full app experience.</p>
+                    <p className="pwa-install__sub">Add Reflex Titan to your home screen for the full app experience.</p>
                     <button className="pwa-install__btn" onClick={handleInstallApp}>
                       ⬇ Install App
                     </button>
@@ -591,7 +591,7 @@ const [personalBest, setPersonalBest] = useState(readPersonalBest);
                 {iosInstallHint === 'safari' && (
                   <div className="pwa-install">
                     <p className="pwa-install__label">Install App</p>
-                    <p className="pwa-install__sub">Install Reflex Tile for the full app experience — no App Store needed.</p>
+                    <p className="pwa-install__sub">Install Reflex Titan for the full app experience — no App Store needed.</p>
                     <ol className="pwa-install__steps">
                       <li><span className="pwa-install__icon">⬆</span> Tap the <strong>Share</strong> button in Safari</li>
                       <li><span className="pwa-install__icon">＋</span> Tap <strong>Install App</strong></li>
@@ -603,7 +603,7 @@ const [personalBest, setPersonalBest] = useState(readPersonalBest);
                 {iosInstallHint === 'chrome' && (
                   <div className="pwa-install">
                     <p className="pwa-install__label">Install App</p>
-                    <p className="pwa-install__sub">Install Reflex Tile directly from Chrome — no App Store needed.</p>
+                    <p className="pwa-install__sub">Install Reflex Titan directly from Chrome — no App Store needed.</p>
                     <ol className="pwa-install__steps">
                       <li><span className="pwa-install__icon">⋯</span> Tap the <strong>three-dot menu</strong> (⋮) at the bottom of Chrome</li>
                       <li><span className="pwa-install__icon">＋</span> Tap <strong>Install App</strong></li>
@@ -615,7 +615,7 @@ const [personalBest, setPersonalBest] = useState(readPersonalBest);
                 {iosInstallHint === 'firefox' && (
                   <div className="pwa-install">
                     <p className="pwa-install__label">Install App</p>
-                    <p className="pwa-install__sub">Install Reflex Tile directly from Firefox — no App Store needed.</p>
+                    <p className="pwa-install__sub">Install Reflex Titan directly from Firefox — no App Store needed.</p>
                     <ol className="pwa-install__steps">
                       <li><span className="pwa-install__icon">⋯</span> Tap the <strong>menu button</strong> (☰) at the bottom of Firefox</li>
                       <li><span className="pwa-install__icon">＋</span> Tap <strong>Install App</strong></li>
