@@ -213,7 +213,7 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
 
   const setupSong = () => {
     if (songRef.current) return;
-    const audio = new Audio('/Asake-Lonely-At-The-Top.mp3');
+    const audio = new Audio('/Straffitti.mp3');
     audio.loop    = true;
     audio.preload = 'auto';
     songRef.current = audio;
