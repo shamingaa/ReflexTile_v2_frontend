@@ -911,7 +911,7 @@ function GameBoard({ playerName, mode, difficulty = 'normal', onFinish, personal
       {/* Now playing label */}
       {soundOn && (
         <div className="sound-bar">
-          <span className="now-playing">BIG KALA 14 - Straffitti</span>
+          <span className="now-playing">Ofe Nsala - Straffitti & Odumodublvck</span>
         </div>
       )}
     </div>
